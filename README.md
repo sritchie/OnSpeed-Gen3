@@ -7,7 +7,7 @@ used for approach and landing, assists with maximum performance takeoff and prov
 turn performance.  The aural logic simplifies energy management and helps the pilot maintain 
 positive aircraft control.
 
-Gen3 builds on and extends the capabilities of Gen3 with new hardware and software. The 
+Gen3 builds on and extends the capabilities of Gen2 with new hardware and software. The 
 current Gen3 device is avionics independent. The current features include:
 
     Measures differential pressures from an AOA pitot tube
