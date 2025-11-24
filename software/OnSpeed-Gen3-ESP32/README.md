@@ -13,11 +13,11 @@ the Arduino 2 IDE support for the ESP32-S3 is included via the Arduino Board Man
 using Board Manager the Preferences must be updated to include the URL of the Espressif
 ESP32 boards to be used. In the "Additional Boards Manager URLs" include the following URL...
 
-    `https://espressif.github.io/arduino-esp32/package_esp32_index.json'
+    https://espressif.github.io/arduino-esp32/package_esp32_index.json
 
 If you anticipate working with M5 Stack code also then also include the following URL...
 
-    `https://static-cdn.m5stack.com/resource/arduino/package_m5stack_index.json`
+    https://static-cdn.m5stack.com/resource/arduino/package_m5stack_index.json
 
 In the Preferences dialog also make sure your sketch location is correctly set. This is
 necessary to find the necessary libraries.
