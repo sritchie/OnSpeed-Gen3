@@ -1,0 +1,66 @@
+# OnSpeed Gen3 ESP32 Clang Format Configuration
+# Based on existing code style patterns observed in the codebase
+
+Language: Cpp
+BasedOnStyle: LLVM
+
+# Indentation
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+IndentCaseLabels: false
+NamespaceIndentation: None
+
+# Braces - Allman style (braces on their own line) matching existing code
+BreakBeforeBraces: Allman
+BraceWrapping:
+  AfterClass: true
+  AfterControlStatement: true
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: true
+  AfterStruct: true
+  BeforeElse: true
+  IndentBraces: false
+
+# Line width
+ColumnLimit: 120
+
+# Alignment
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignOperands: true
+AlignTrailingComments: true
+
+# Spacing
+SpaceAfterCStyleCast: false
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeParens: ControlStatements
+SpaceInEmptyParentheses: false
+SpacesInAngles: false
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# Pointer/Reference alignment
+PointerAlignment: Right
+DerivePointerAlignment: false
+
+# Include sorting
+SortIncludes: false
+IncludeBlocks: Preserve
+
+# Other
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+BreakBeforeBinaryOperators: None
+BreakBeforeTernaryOperators: true
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 2
+
+# Comments
+ReflowComments: false

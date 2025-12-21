@@ -1,0 +1,241 @@
+# OnSpeed Gen3 ESP32 Continuous Integration
+#
+# This workflow runs on every push and pull request to:
+# 1. Compile the firmware (catches syntax errors, missing includes, etc.)
+# 2. Run unit tests for critical math functions
+# 3. Check code formatting (optional)
+#
+# The firmware build uses PlatformIO which handles all ESP32 toolchain setup.
+
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'software/**'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - 'software/**'
+      - '.github/workflows/**'
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  # ==========================================================================
+  # Job 1: Build the ESP32 firmware
+  # ==========================================================================
+  build:
+    name: Build Firmware
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio/packages
+            ~/.platformio/platforms
+            ~/.platformio/penv
+          # Use a stable cache key based on platform version, not entire platformio.ini
+          # This avoids re-downloading 500MB+ when only comments change
+          key: ${{ runner.os }}-pio-espressif32-54.03.20-v1
+          restore-keys: |
+            ${{ runner.os }}-pio-espressif32-
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-platformio
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+
+      - name: Build firmware
+        working-directory: software/OnSpeed-Gen3-ESP32
+        run: |
+          # Build the main firmware
+          pio run -e esp32s3
+
+          # Report build size
+          echo "## Build Size" >> $GITHUB_STEP_SUMMARY
+          pio run -e esp32s3 -t size 2>&1 | tail -20 >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: software/OnSpeed-Gen3-ESP32/.pio/build/esp32s3/*.bin
+          retention-days: 30
+
+  # ==========================================================================
+  # Job 2: Run unit tests with code coverage
+  # ==========================================================================
+  test:
+    name: Unit Tests + Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio/packages
+            ~/.platformio/platforms
+            ~/.platformio/penv
+          # Native tests only need Unity framework, use simpler cache key
+          key: ${{ runner.os }}-pio-native-v1
+          restore-keys: |
+            ${{ runner.os }}-pio-native-
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-platformio
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install PlatformIO and lcov
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+          sudo apt-get update && sudo apt-get install -y lcov
+
+      - name: Run unit tests with coverage
+        working-directory: software/OnSpeed-Gen3-ESP32
+        run: |
+          # Run tests with coverage instrumentation
+          pio test -e native-coverage -v
+
+          echo "## Unit Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "✅ All tests passed" >> $GITHUB_STEP_SUMMARY
+
+      - name: Generate coverage report
+        working-directory: software/OnSpeed-Gen3-ESP32
+        run: |
+          # Capture coverage data
+          lcov --capture \
+               --directory .pio/build/native-coverage \
+               --output-file coverage.info \
+               --rc branch_coverage=1
+
+          # Remove test files and system headers from coverage
+          # Use --ignore-errors unused since not all patterns may match
+          lcov --remove coverage.info \
+               '*/test/*' \
+               '*/.pio/*' \
+               '/usr/*' \
+               --output-file coverage.info \
+               --rc branch_coverage=1 \
+               --ignore-errors unused
+
+          # Generate HTML report
+          genhtml coverage.info \
+                  --output-directory coverage-report \
+                  --rc branch_coverage=1
+
+          # Summary
+          echo "## Code Coverage" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          lcov --summary coverage.info 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: software/OnSpeed-Gen3-ESP32/coverage.info
+          flags: unittests
+          name: onspeed-coverage
+          fail_ci_if_error: false
+          verbose: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload coverage report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: software/OnSpeed-Gen3-ESP32/coverage-report/
+          retention-days: 14
+
+  # ==========================================================================
+  # Job 3: Static analysis with cppcheck
+  # ==========================================================================
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install cppcheck
+        run: sudo apt-get update && sudo apt-get install -y cppcheck
+
+      - name: Run cppcheck
+        working-directory: software/OnSpeed-Gen3-ESP32
+        continue-on-error: true  # Don't fail the build on warnings
+        run: |
+          echo "## Static Analysis Results" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cppcheck --enable=warning,performance,portability \
+                   --suppress=missingIncludeSystem \
+                   --suppress=unmatchedSuppression \
+                   --inline-suppr \
+                   --error-exitcode=0 \
+                   --template='{file}:{line}: {severity}: {message} [{id}]' \
+                   *.cpp *.h 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  # ==========================================================================
+  # Job 4: Check code formatting (optional, informational)
+  # ==========================================================================
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check clang-format
+        working-directory: software/OnSpeed-Gen3-ESP32
+        continue-on-error: true  # Informational only
+        run: |
+          # Find files that would be reformatted
+          CHANGED_FILES=$(find . -maxdepth 1 -name '*.cpp' -o -name '*.h' | head -10 | xargs clang-format --dry-run --Werror 2>&1 || true)
+
+          if [ -n "$CHANGED_FILES" ]; then
+            echo "::notice::Some files don't match .clang-format style (informational only)"
+            echo "Run 'clang-format -i *.cpp *.h' to fix formatting"
+          else
+            echo "All checked files match .clang-format style"
+          fi

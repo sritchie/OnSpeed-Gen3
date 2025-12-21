@@ -1,0 +1,8 @@
+{
+    "name": "onspeed_native",
+    "version": "1.0.0",
+    "description": "Native compatibility layer for OnSpeed (stubs for ESP32/Arduino)",
+    "keywords": ["native", "testing", "development"],
+    "platforms": ["native"],
+    "frameworks": "*"
+}

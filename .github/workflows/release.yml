@@ -1,0 +1,195 @@
+# OnSpeed Gen3 Release Workflow
+#
+# Creates GitHub releases with firmware binaries when pushing version tags.
+# Also provides manual release triggers with semantic version increment options.
+#
+# Tag format: vX.Y.Z (e.g., v4.1.0)
+#
+# Manual trigger options:
+#   - major: v4.0.0 -> v5.0.0 (breaking changes)
+#   - minor: v4.0.0 -> v4.1.0 (new features)
+#   - patch: v4.0.0 -> v4.0.1 (bug fixes)
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: 'Version increment type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  # ==========================================================================
+  # Create release from tag push
+  # ==========================================================================
+  release-from-tag:
+    name: Release from Tag
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+
+      - name: Build firmware
+        working-directory: software/OnSpeed-Gen3-ESP32
+        run: |
+          pio run -e esp32s3
+
+      - name: Get version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building release version: $VERSION"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: OnSpeed Gen3 v${{ steps.version.outputs.version }}
+          body: |
+            ## OnSpeed Gen3 Firmware v${{ steps.version.outputs.version }}
+
+            ### Installation
+            1. Download `firmware.bin`
+            2. Use ESP32 Flash Download Tool or esptool.py to flash
+            3. Or use OTA update through the web interface
+
+            ### What's Changed
+            See [CHANGELOG.md](CHANGELOG.md) for details.
+
+            ### Checksums
+            ```
+            SHA256: $(sha256sum software/OnSpeed-Gen3-ESP32/.pio/build/esp32s3/firmware.bin | cut -d' ' -f1)
+            ```
+          files: |
+            software/OnSpeed-Gen3-ESP32/.pio/build/esp32s3/firmware.bin
+            software/OnSpeed-Gen3-ESP32/.pio/build/esp32s3/bootloader.bin
+            software/OnSpeed-Gen3-ESP32/.pio/build/esp32s3/partitions.bin
+          draft: false
+          prerelease: false
+
+  # ==========================================================================
+  # Create release from manual trigger with version bump
+  # ==========================================================================
+  release-manual:
+    name: Manual Release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Calculate next version
+        id: version
+        run: |
+          # Get the latest version tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          LATEST_VERSION=${LATEST_TAG#v}
+
+          # Parse version components
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$LATEST_VERSION"
+          MAJOR=${MAJOR:-0}
+          MINOR=${MINOR:-0}
+          PATCH=${PATCH:-0}
+
+          # Increment based on input
+          case "${{ github.event.inputs.version_bump }}" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          NEW_TAG="v${NEW_VERSION}"
+
+          echo "previous=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          echo "Bumping version: $LATEST_VERSION -> $NEW_VERSION (${{ github.event.inputs.version_bump }})"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+
+      - name: Build firmware
+        working-directory: software/OnSpeed-Gen3-ESP32
+        run: |
+          pio run -e esp32s3
+
+      - name: Create and push tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: OnSpeed Gen3 v${{ steps.version.outputs.version }}
+          body: |
+            ## OnSpeed Gen3 Firmware v${{ steps.version.outputs.version }}
+
+            Automatic ${{ github.event.inputs.version_bump }} release from v${{ steps.version.outputs.previous }}.
+
+            ### Installation
+            1. Download `firmware.bin`
+            2. Use ESP32 Flash Download Tool or esptool.py to flash
+            3. Or use OTA update through the web interface
+
+            ### What's Changed
+            See commits since v${{ steps.version.outputs.previous }}: [Compare](https://github.com/${{ github.repository }}/compare/v${{ steps.version.outputs.previous }}...${{ steps.version.outputs.tag }})
+          files: |
+            software/OnSpeed-Gen3-ESP32/.pio/build/esp32s3/firmware.bin
+            software/OnSpeed-Gen3-ESP32/.pio/build/esp32s3/bootloader.bin
+            software/OnSpeed-Gen3-ESP32/.pio/build/esp32s3/partitions.bin
+          draft: false
+          prerelease: false
