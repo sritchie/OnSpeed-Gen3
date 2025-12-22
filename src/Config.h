@@ -3,7 +3,15 @@
 #ifndef _CONFIG_H_
 #define _CONFIG_H_
 
+#include <cstdint>  // For uint8_t, etc.
 #include <vector>
+
+#ifdef ARDUINO
+#include <Arduino.h>  // For String type
+#else
+#include <string>
+using String = std::string;
+#endif
 
 // #include "Globals.h"
 
