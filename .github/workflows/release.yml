@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio/packages
+            ~/.platformio/platforms
+            ~/.platformio/penv
+          key: ${{ runner.os }}-pio-espressif32-54.03.20-v1
+          restore-keys: |
+            ${{ runner.os }}-pio-espressif32-
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+
+      - name: Build firmware
+        run: pio run -e esp32s3
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          cp .pio/build/esp32s3/firmware.bin release/onspeed-${{ github.event.release.tag_name }}.bin
+          cp .pio/build/esp32s3/bootloader.bin release/bootloader.bin
+          cp .pio/build/esp32s3/partitions.bin release/partitions.bin
+
+      - name: Attach firmware to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

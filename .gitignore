@@ -4,3 +4,6 @@ Software/.DS_Store
 Software/Arduino/.DS_Store
 Software/Arduino/libraries/.DS_Store
 .pio
+
+# auto-generated on each build by PlatformIO
+lib/version/buildinfo.cpp

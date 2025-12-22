@@ -2,14 +2,14 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    branches: [master]
     paths:
       - 'src/**'
       - 'lib/**'
       - 'platformio.ini'
       - '.github/workflows/**'
   pull_request:
-    branches: [main, master]
+    branches: [master]
     paths:
       - 'src/**'
       - 'lib/**'
@@ -66,6 +66,7 @@ jobs:
           pio run -e esp32s3 -t size 2>&1 | tail -20 >> $GITHUB_STEP_SUMMARY
 
       - name: Upload firmware artifact
+        if: github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: firmware
