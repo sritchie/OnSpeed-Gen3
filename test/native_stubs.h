@@ -48,23 +48,41 @@ public:
     void flush() {}
 };
 
-// Global stubs for logging (the real code uses g_Log extensively)
-class FakeMsgLog {
+// Stub for MsgLog - matches the interface in src/ErrorLogger.h
+class MsgLog {
 public:
-    enum Module { EnMain, EnConfig, EnAHRS, EnDisk, EnIMU };
-    enum Level { EnDebug, EnWarning, EnError, EnOff };
+    MsgLog() {}
 
-    bool Test(Module m, Level l) { (void)m; (void)l; return false; }
-    void print(Module m, Level l, const char* s) { (void)m; (void)l; (void)s; }
-    void println(Module m, Level l, const char* s) { (void)m; (void)l; (void)s; }
-    void printf(Module m, Level l, const char* fmt, ...) { (void)m; (void)l; (void)fmt; }
-    void print(const char* s) { (void)s; }
-    void println(const char* s) { (void)s; }
-    void printf(const char* fmt, ...) { (void)fmt; }
+    // Logging levels - must match ErrorLogger.h
+    enum EnLevel { EnDebug, EnWarning, EnError, EnOff };
+
+    // Modules - must match ErrorLogger.h
+    enum EnModule {
+        EnMain, EnAHRS, EnAudio, EnBoom, EnConfig, EnWebServer,
+        EnDataServer, EnDisplay, EnEfis, EnPressure, EnIMU,
+        EnReplay, EnDisk, EnSensors, EnSwitch, EnVolume, EnVN300,
+        ModuleCount
+    };
+
+    // All methods are no-ops for testing
+    void Set(EnModule, EnLevel) {}
+    bool Set(const char*, EnLevel) { return true; }
+    bool Test(EnModule, EnLevel) { return false; }
+    char* szLevelName(EnLevel) { return nullptr; }
+
+    void print(EnModule, EnLevel, const char*) {}
+    void println(EnModule, EnLevel, const char*) {}
+    void printf(EnModule, EnLevel, const char*, ...) {}
+
+    size_t print(const char*) { return 0; }
+    size_t println(const char*) { return 0; }
+    size_t printf(const char*, ...) { return 0; }
+
+    void flush() {}
 };
 
 // Stubs for global objects used by the code under test
-extern FakeMsgLog g_Log;
+extern MsgLog g_Log;
 extern float g_fCoeffP;
 
 // Note: SuCalibrationCurve is now defined in lib/onspeed_core/CurveCalc.h
