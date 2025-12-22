@@ -1,18 +1,11 @@
 // this library is sourced from https://github.com/har-in-air/Kalmanfilter_altimeter_vario, on Jun 17, 2020
 
-#ifdef NATIVE_BUILD
-#include <cmath>
-// Arduino compatibility for native builds
-#ifndef constrain
-#define constrain(amt, low, high) ((amt) < (low) ? (low) : ((amt) > (high) ? (high) : (amt)))
-#endif
-using std::fabs;
-#else
-#include "Arduino.h"
-#include <math.h>
-#endif
-
 #include "KalmanFilter.h"
+
+#ifndef NATIVE_BUILD
+#include <Arduino.h>
+#endif
+#include <cmath>
 
 // Tracks the position z and velocity v of an object moving in a straight line,
 // (here assumed to be vertical) that is perturbed by random accelerations.
