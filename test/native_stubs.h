@@ -85,8 +85,12 @@ public:
 extern MsgLog g_Log;
 extern float g_fCoeffP;
 
-// Note: SuCalibrationCurve is now defined in lib/onspeed_core/CurveCalc.h
-// with proper #ifdef NATIVE_BUILD handling
+// Stub for SuCalibrationCurve - matches the struct in src/Config.h
+#define MAX_CURVE_COEFF 4
+struct SuCalibrationCurve {
+    float afCoeff[MAX_CURVE_COEFF];
+    uint8_t iCurveType;  // 1=polynomial, 2=logarithmic, 3=exponential
+};
 
 #endif /* __cplusplus */
 
