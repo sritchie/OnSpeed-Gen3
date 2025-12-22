@@ -1,6 +1,6 @@
 
-//#include <arduino.h>
-#include "globals.h"
+//#include <Arduino.h>
+#include "Globals.h"
 
 // Move audio with the ball, scaling is 0.08 LateralG/ball width
 // This curve works up to about 0.08 G of lateral acceleration

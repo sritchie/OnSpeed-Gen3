@@ -48,8 +48,8 @@ while powered up then good things would happen.
 bool SdFileSys::Init()
     {
     // Init SD SPI interface
-    if (!uSD_SPI.begin(SD_SCLK, SD_MISO, SD_MOSI, SD_CS))
-        return false;
+    // Note: SPIClass::begin() returns void in Arduino Core 3.x
+    uSD_SPI.begin(SD_SCLK, SD_MISO, SD_MOSI, SD_CS);
 
     // Init FAT file system object
     bSdAvailable = uSD_FAT.begin(SpiConfig);

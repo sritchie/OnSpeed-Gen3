@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'src/**'
+      - 'lib/**'
+      - 'platformio.ini'
+      - '.github/workflows/**'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'src/**'
+      - 'lib/**'
+      - 'platformio.ini'
+      - '.github/workflows/**'
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build ESP32 Firmware
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio/packages
+            ~/.platformio/platforms
+            ~/.platformio/penv
+          key: ${{ runner.os }}-pio-espressif32-54.03.20-v1
+          restore-keys: |
+            ${{ runner.os }}-pio-espressif32-
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-platformio
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install PlatformIO
+        run: |
+          python -m pip install --upgrade pip
+          pip install platformio
+
+      - name: Build firmware
+        run: |
+          # Build the main firmware
+          pio run -e esp32s3
+
+          # Report build size
+          echo "## Build Size" >> $GITHUB_STEP_SUMMARY
+          pio run -e esp32s3 -t size 2>&1 | tail -20 >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware
+          path: .pio/build/esp32s3/*.bin
+          retention-days: 30
