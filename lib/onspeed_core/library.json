@@ -1,0 +1,7 @@
+{
+    "name": "onspeed_core",
+    "version": "1.0.0",
+    "description": "OnSpeed core math/logic modules (testable without hardware)",
+    "platforms": ["native", "espressif32"],
+    "frameworks": "*"
+}
