@@ -96,7 +96,7 @@
 
 #include <stdint.h>
 
-#include <arduino.h>
+#include <Arduino.h>
 
 // FreeRTOS includes
 #include "FreeRTOS.h"

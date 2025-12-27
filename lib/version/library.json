@@ -1,0 +1,5 @@
+{
+  "name": "version",
+  "version": "1.0.0",
+  "description": "Build version information for OnSpeed firmware"
+}
