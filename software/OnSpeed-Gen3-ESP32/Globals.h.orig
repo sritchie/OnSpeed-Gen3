@@ -12,7 +12,7 @@
 #define EXTERN_CLASS(var, ...)    extern var;
 #endif
 
-#include <arduino.h>
+#include <Arduino.h>
 
 #define VERSION "3.3.7a" // optimized AHRS parameters for better pitch performance during AOA calibration
 //"3.3.7" // fixed dumb mistake of using TAS in kts instead of m/sec in the AHRS airspeed correction when OAT enabled.
