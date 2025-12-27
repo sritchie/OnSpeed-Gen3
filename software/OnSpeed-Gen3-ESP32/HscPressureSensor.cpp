@@ -1,6 +1,6 @@
 
-#include <arduino.h>
-#include <spi.h>
+#include <Arduino.h>
+#include <SPI.h>
 
 #include "Globals.h"
 #include "HscPressureSensor.h"

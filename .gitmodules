@@ -31,3 +31,9 @@
 [submodule "software/Libraries/arduinoWebSockets"]
 	path = software/Libraries/arduinoWebSockets
 	url = git@github.com:Links2004/arduinoWebSockets.git
+[submodule "software/Libraries/ArduinoJson"]
+	path = software/Libraries/ArduinoJson
+	url = https://github.com/bblanchon/ArduinoJson.git
+[submodule "software/Libraries/ghostl"]
+	path = software/Libraries/ghostl
+	url = https://github.com/dok-net/ghostl.git
