@@ -1,12 +1,9 @@
 
 #pragma once
 
-#include <HardwareSerial.h>
+#include <Arduino.h>  // For Stream base class
 
 #include "Globals.h"
-
-//#include <SoftwareSerial.h>
-#include <HardwareSerial.h>
 
 #define CONSOLE_BUFFER_SIZE    127
 
@@ -20,7 +17,9 @@ public:
 
     // Data
 public:
-    HardwareSerial    * pSerial;
+    // Use Stream* for compatibility with both HardwareSerial (ESP32)
+    // and HWCDC (ESP32-S3 USB CDC) in Arduino Core 3.x
+    Stream            * pSerial;
     bool                bEnabled;
 
     char                CmdBuffer[CONSOLE_BUFFER_SIZE];
