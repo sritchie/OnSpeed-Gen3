@@ -2,12 +2,17 @@
 #include "Globals.h"
 #include "Config.h"
 #include "Flaps.h"
+#ifdef HW_V4P
+#include "Mcp3204Adc.h"
+#endif
 
 // ----------------------------------------------------------------------------
 
 Flaps::Flaps()
 {
+#ifndef HW_V4P
     pinMode(FLAP_PIN, INPUT_PULLUP);
+#endif
 }
 
 // ----------------------------------------------------------------------------
@@ -16,7 +21,11 @@ Flaps::Flaps()
 
 uint16_t Flaps::Read()
 {
+#ifdef HW_V4P
+    return Mcp3204Read(ADC_CH_FLAP);
+#else
     return analogRead(FLAP_PIN);
+#endif
 }
 
 // ----------------------------------------------------------------------------

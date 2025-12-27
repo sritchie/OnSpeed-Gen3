@@ -7,7 +7,7 @@
 
 #include <WebSocketsServer.h>   // https://github.com/Links2004/arduinoWebSockets version 2.1.3
 
-//#include <ArduinoJson.h>
+#include <ArduinoJson.h>
 
 #include "Globals.h"
 #include "DataServer.h"
@@ -32,7 +32,7 @@ WebSocketsServer    DataServer = WebSocketsServer(81);
 // Function prototypes
 // -------------------
 void    DataServerEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length);
-String  UpdateLiveDataJson();
+size_t  UpdateLiveDataJson(char * pOut, size_t uOutSize);
 
 unsigned long   lNextMillis = 0;
 
@@ -40,7 +40,7 @@ unsigned long   lNextMillis = 0;
 
 void DataServerPoll()
     {
-    String          sLiveDataJson;
+    char            szLiveDataJson[512];
 
     DataServer.loop();
 
@@ -49,8 +49,9 @@ void DataServerPoll()
         {
         if (DataServer.connectedClients(false) > 0)
             {
-            sLiveDataJson = UpdateLiveDataJson();
-            DataServer.broadcastTXT(sLiveDataJson);
+            size_t uLen = UpdateLiveDataJson(szLiveDataJson, sizeof(szLiveDataJson));
+            if (uLen > 0)
+                DataServer.broadcastTXT(szLiveDataJson, uLen);
             }
         lNextMillis = millis() + 100;
         }
@@ -112,8 +113,21 @@ void DataServerEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t lengt
 
 // ----------------------------------------------------------------------------
 
-String UpdateLiveDataJson()
+static inline bool IsFiniteFloat(float v)
     {
+    return !isnan(v) && !isinf(v);
+    }
+
+static inline float SafeJsonFloat(float v, float fallback)
+    {
+    return IsFiniteFloat(v) ? v : fallback;
+    }
+
+size_t UpdateLiveDataJson(char * pOut, size_t uOutSize)
+    {
+    if (pOut == nullptr || uOutSize == 0)
+        return 0;
+
 #if 1
     float fWifiAOA;
     float fWifiPitch;
@@ -235,53 +249,70 @@ String UpdateLiveDataJson()
 
 #endif
 
-    const char * szFormat =  R"(
-{
-    "AOA": %.2f,
-    "Pitch": %.2f,
-    "Roll": %.2f,
-    "IAS": %.2f,
-    "PAlt": %.2f,
-    "verticalGLoad": %.2f,
-    "lateralGLoad": %.2f,
-    "LDmax": %.2f,
-    "OnspeedFast": %.2f,
-    "OnspeedSlow": %.2f,
-    "OnspeedWarn": %.2f,
-    "flapsPos": %i,
-    "flapIndex": %i,
-    "coeffP": %.2f,
-    "dataMark": %i,
-    "kalmanVSI": %.2f,
-    "flightPath": %.2f,
-    "PitchRate": %.2f,
-    "DecelRate": %.2f
-}
-)";
+    // Build a compact JSON payload into a fixed-size buffer to avoid heap churn
+    // and prevent buffer overruns on unexpected values.
+    const char * szFormat =
+        "{\"AOA\":%.2f,\"Pitch\":%.2f,\"Roll\":%.2f,\"IAS\":%.2f,\"PAlt\":%.2f,"
+        "\"verticalGLoad\":%.2f,\"lateralGLoad\":%.2f,\"LDmax\":%.2f,\"OnspeedFast\":%.2f,"
+        "\"OnspeedSlow\":%.2f,\"OnspeedWarn\":%.2f,\"flapsPos\":%i,\"flapIndex\":%i,"
+        "\"coeffP\":%.2f,\"dataMark\":%i,\"kalmanVSI\":%.2f,\"flightPath\":%.2f,"
+        "\"PitchRate\":%.2f,\"DecelRate\":%.2f}";
 
-    char szReturn[500];
-    sprintf(szReturn, szFormat, 
-        fWifiAOA, 
-        fWifiPitch, 
+    // Ensure JSON never contains invalid numeric tokens like "nan"/"inf".
+    fWifiAOA        = SafeJsonFloat(fWifiAOA, -100.0f);
+    fWifiPitch      = SafeJsonFloat(fWifiPitch, 0.0f);
+    fWifiRoll       = SafeJsonFloat(fWifiRoll, 0.0f);
+    fWifiIAS        = SafeJsonFloat(fWifiIAS, 0.0f);
+    fWifiVSI        = SafeJsonFloat(fWifiVSI, 0.0f);
+    fWifiFlightpath = SafeJsonFloat(fWifiFlightpath, 0.0f);
+    fVerticalGload  = SafeJsonFloat(fVerticalGload, 0.0f);
+
+    const float fPAltFt = SafeJsonFloat(M2FT(g_AHRS.KalmanAlt), 0.0f);
+    const float fLatG   = SafeJsonFloat(g_AHRS.AccelLatCorr, 0.0f);
+    const float fCoeffP = SafeJsonFloat((float)g_fCoeffP, 0.0f);
+    const float fPitchRate = SafeJsonFloat(g_AHRS.gPitch, 0.0f);
+    const float fDecelRate = SafeJsonFloat(g_Sensors.fDecelRate, 0.0f);
+
+    int iChars = snprintf(
+        pOut,
+        uOutSize,
+        szFormat,
+        fWifiAOA,
+        fWifiPitch,
         fWifiRoll,
-        fWifiIAS, 
-        M2FT(g_AHRS.KalmanAlt), 
-        fVerticalGload, 
-        g_AHRS.AccelLatCorr,
-        g_Config.aFlaps[g_Flaps.iIndex].fLDMAXAOA,
-        g_Config.aFlaps[g_Flaps.iIndex].fONSPEEDFASTAOA,
-        g_Config.aFlaps[g_Flaps.iIndex].fONSPEEDSLOWAOA,
-        g_Config.aFlaps[g_Flaps.iIndex].fSTALLWARNAOA,
+        fWifiIAS,
+        fPAltFt,
+        fVerticalGload,
+        fLatG,
+        SafeJsonFloat(g_Config.aFlaps[g_Flaps.iIndex].fLDMAXAOA, 0.0f),
+        SafeJsonFloat(g_Config.aFlaps[g_Flaps.iIndex].fONSPEEDFASTAOA, 0.0f),
+        SafeJsonFloat(g_Config.aFlaps[g_Flaps.iIndex].fONSPEEDSLOWAOA, 0.0f),
+        SafeJsonFloat(g_Config.aFlaps[g_Flaps.iIndex].fSTALLWARNAOA, 0.0f),
         g_Flaps.iPosition,
         g_Flaps.iIndex,
-        g_fCoeffP, 
-        g_iDataMark, 
+        fCoeffP,
+        g_iDataMark,
         fWifiVSI,
         fWifiFlightpath,
-        g_AHRS.gPitch,
-        g_Sensors.fDecelRate
-        );
+        fPitchRate,
+        fDecelRate);
 
-    return String(szReturn);
+    if (iChars < 0)
+        return 0;
+
+    // Truncated; return a minimal valid JSON object rather than invalid data.
+    if ((size_t)iChars >= uOutSize)
+        {
+        if (uOutSize >= 3)
+            {
+            pOut[0] = '{';
+            pOut[1] = '}';
+            pOut[2] = '\0';
+            return 2;
+            }
+        pOut[0] = '\0';
+        return 0;
+        }
+
+    return (size_t)iChars;
     }
-

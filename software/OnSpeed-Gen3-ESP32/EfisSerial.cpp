@@ -99,6 +99,8 @@ long double array2double(byte buffer[], int startIndex)
 EfisSerialIO::EfisSerialIO()
 {
     efisPacketInProgress = false;
+    PrevInByte = 0;
+    PrevInChar = 0;
 
     suEfis.DecelRate        = 0.00;
     suEfis.IAS              = 0.00;
@@ -118,6 +120,7 @@ EfisSerialIO::EfisSerialIO()
     suEfis.PercentPower     = 0;
     suEfis.Heading          = -1;
     suEfis.Time             = "";
+    suEfis.Time.reserve(16);
 
     BufferIndex        = 0;
 
@@ -146,10 +149,13 @@ EfisSerialIO::EfisSerialIO()
     suVN300.GnssLat         = 0.00L;     // 8 byte double
     suVN300.GnssLon         = 0.00L;
     suVN300.TimeUTC         = "";
+    suVN300.TimeUTC.reserve(24);
 
     BufferIndex             = 0;
 
     mglMsgLen               = 0;
+
+    BufferString.reserve(256);
 
     uTimestamp = millis();
 }
@@ -332,7 +338,7 @@ void EfisSerialIO::Read()
 
                     if (g_Log.Test(MsgLog::EnEfis, MsgLog::EnDebug))
                         {
-                        g_Log.printf(MsgLog::EnEfis, MsgLog::EnDebug, "%ul", uTimestamp);
+                        g_Log.printf(MsgLog::EnEfis, MsgLog::EnDebug, "%lu", uTimestamp);
                         g_Log.printf(MsgLog::EnEfis, MsgLog::EnDebug, "\nvnAngularRateRoll: %.2f,vnAngularRatePitch: %.2f,vnAngularRateYaw: %.2f,vnVelNedNorth: %.2f,vnVelNedEast: %.2f,vnVelNedDown: %.2f,vnAccelFwd: %.2f,vnAccelLat: %.2f,vnAccelVert: %.2f,vnYaw: %.2f,vnPitch: %.2f,vnRoll: %.2f,vnLinAccFwd: %.2f,vnLinAccLat: %.2f,vnLinAccVert: %.2f,vnYawSigma: %.2f,vnRollSigma: %.2f,vnPitchSigma: %.2f,vnGnssVelNedNorth: %.2f,vnGnssVelNedEast: %.2f,vnGnssVelNedDown: %.2f,vnGnssLat: %.6f,vnGnssLon: %.6f,vnGPSFix: %i,TimeUTC: %s\n",
                             suVN300.AngularRateRoll, suVN300.AngularRatePitch, suVN300.AngularRateYaw, 
                             suVN300.VelNedNorth, suVN300.VelNedEast, suVN300.VelNedDown,

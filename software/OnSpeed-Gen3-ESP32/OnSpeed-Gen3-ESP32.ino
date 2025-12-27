@@ -11,6 +11,9 @@ Do a text search for comments starting with "////"
 
 */
 
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+
 #include <HardwareSerial.h>
 //#include <SoftwareSerial.h>
 
@@ -31,17 +34,38 @@ uint64_t            uLoopTimeMin = UINT_MAX;
 uint64_t            uLoopTimeMax = 0;
 unsigned            uLoopCount   = 0;
 
+// Task to handle web server polling on Core 0
+void WebServerTask(void * pvParams)
+{
+    for(;;)
+    {
+        CfgWebServerPoll();
+        // Yield to allow other tasks on Core 0 (like WiFi stack) to run
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+}
+
+// Task to handle websocket polling on Core 0
+void DataServerTask(void * pvParams)
+{
+    for(;;)
+    {
+        DataServerPoll();
+        // Yield to allow other tasks on Core 0 (like WiFi stack) to run
+        vTaskDelay(pdMS_TO_TICKS(5));
+    }
+}
 
 // ----------------------------------------------------------------------------
 
 void setup() 
 {
+    
+    delay(1000);
 
-    delay(100);
-
-//    Serial.begin(115200);
+    //Serial.begin(115200);
     Serial.begin(921600);
-    Serial.print("\nOnSpeed Gen2V4 ");
+    Serial.print("\nOnSpeed Gen3 ");
     Serial.println(VERSION);
 
     // Setup FreeRTOS semaphores and error logging
@@ -133,7 +157,7 @@ void setup()
 
     // There are a bunch of EFIS types so the EFIS object gets to
     // setup its own hardware serial port
-    g_EfisSerial.Init(EfisSerialIO::EnVN300,  &Serial2);
+    g_EfisSerial.Init(g_EfisSerial.enType,  &Serial2);
 
     // The M5 display and the boom get to share
     uint32_t    SerialConfig = SerialConfig::SERIAL_8N1;
@@ -152,6 +176,9 @@ void setup()
     pinMode(CS_STATIC, OUTPUT); digitalWrite(CS_STATIC, HIGH);
     pinMode(CS_AOA,    OUTPUT); digitalWrite(CS_AOA,    HIGH);
     pinMode(CS_PITOT,  OUTPUT); digitalWrite(CS_PITOT,  HIGH);
+#ifdef HW_V4P
+    pinMode(CS_ADC,    OUTPUT); digitalWrite(CS_ADC,    HIGH);
+#endif
     pinMode(SD_CS,     OUTPUT); digitalWrite(SD_CS,     HIGH);
  
     // Init sensor SPI interface
@@ -200,25 +227,33 @@ void setup()
     // Init audio system
     g_AudioPlay.Init();
 
+    // Play the startup prompt.
+    g_AudioPlay.SetVoice(enVoiceEnabled);
+
     // Setup FreeRTOS tasks
     // --------------------
     xLoggingRingBuffer = xRingbufferCreate(30000, RINGBUF_TYPE_BYTEBUF);    // At least 1 sec of data buffering
-    if (xLoggingRingBuffer == NULL)
-        g_Log.println(MsgLog::EnMain, MsgLog::EnError, "xLoggingRingBuffer is NULL");
+    const bool bLoggingRingBufferOk = (xLoggingRingBuffer != NULL);
+    if (!bLoggingRingBufferOk)
+        {
+        g_Log.println(MsgLog::EnMain, MsgLog::EnError, "xLoggingRingBuffer is NULL; disabling SD logging");
+        g_Config.bSdLogging = false;
+        }
 
     // Get the right set of tasks running for the selected mode
     if      (g_Config.suDataSrc.enSrc == SuDataSource::EnSensors)
         {
         // Create logfile
-        if (g_Config.bSdLogging)
+        if (g_Config.bSdLogging && bLoggingRingBufferOk)
             if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(100))) 
                 {
                 g_LogSensor.Open();
                 xSemaphoreGive(xWriteMutex);
                 }
 
-        xTaskCreate(SensorReadTask,       "Read Sensors",   5000, NULL, 3, &xTaskReadSensors);
-        xTaskCreate(LogSensorCommitTask,  "Write Data",     5000, NULL, 1, &xTaskWriteLog);
+        xTaskCreatePinnedToCore(SensorReadTask,       "Read Sensors",   5000, NULL, 5, &xTaskReadSensors, 1);
+        if (bLoggingRingBufferOk)
+            xTaskCreatePinnedToCore(LogSensorCommitTask,  "Write Data",     5000, NULL, 0, &xTaskWriteLog,     1);
 #ifdef LOGDATA_PRESSURE_RATE  // sd card write rate
         g_Log.println("Logging at 50Hz");
 #else
@@ -229,33 +264,33 @@ void setup()
     else if (g_Config.suDataSrc.enSrc == SuDataSource::EnReplay)
         {
         suLogReplayParams.sReplayLogFile = g_Config.sReplayLogFileName;
-        xTaskCreate(LogReplayTask,        "Log Replay",  10000, &suLogReplayParams, 3, &xTaskLogReplay);
+        xTaskCreatePinnedToCore(LogReplayTask,        "Log Replay",  10000, &suLogReplayParams, 3, &xTaskLogReplay, 1);
         g_Log.println("Data Source REPLAYLOGFILE");
         }
     else if (g_Config.suDataSrc.enSrc == SuDataSource::EnTestPot)
         {
         g_Config.bSdLogging = false;
-        xTaskCreate(SensorReadTask,       "Read Sensors",   5000, NULL, 3, &xTaskReadSensors);
-        xTaskCreate(TestPotTask,          "Test Pot",       2000, NULL, 3, &xTaskTestPot);
+        xTaskCreatePinnedToCore(SensorReadTask,       "Read Sensors",   5000, NULL, 5, &xTaskReadSensors, 1);
+        xTaskCreatePinnedToCore(TestPotTask,          "Test Pot",       2000, NULL, 3, &xTaskTestPot,     1);
         g_Log.println("Data Source TESTPOT");
         }
     else if (g_Config.suDataSrc.enSrc == SuDataSource::EnRangeSweep)
         {
         g_Config.bSdLogging = false;
-        xTaskCreate(SensorReadTask,       "Read Sensors",   5000, NULL, 3, &xTaskReadSensors);
-        xTaskCreate(RangeSweepTask,       "Range Sweep",    2000, NULL, 3, &xTaskRangeSweep);
+        xTaskCreatePinnedToCore(SensorReadTask,       "Read Sensors",   5000, NULL, 5, &xTaskReadSensors, 1);
+        xTaskCreatePinnedToCore(RangeSweepTask,       "Range Sweep",    2000, NULL, 3, &xTaskRangeSweep,  1);
         g_Log.println("Data Source RANGESWEEP");
         }
 
     // These always run
-    xTaskCreate(AudioPlayTask,        "AudioPlay",      5000, NULL, 6, &xTaskAudioPlay);
-    xTaskCreate(WriteDisplayDataTask, "Write Display", 10000, NULL, 5, &xTaskDisplaySerial);
-    xTaskCreate(SwitchCheckTask,      "Check Switch",   5000, NULL, 5, &xTaskCheckSwitch);
-    xTaskCreate(CheckGLimitTask,      "Check G Limit",  2000, NULL, 0, &xTaskGLimit);
-    xTaskCreate(CheckVolumeTask,      "Check Volume",   2000, NULL, 0, &xTaskVolume);
-    xTaskCreate(CheckVnoChimeTask,    "Check Vno",      2000, NULL, 0, &xTaskVnoChime);
-    xTaskCreate(Check3DAudioTask,     "Check 3D Audio", 2000, NULL, 0, &xTask3dAudio);
-    xTaskCreate(HeartbeatLedTask,     "Heartbeat",      2000, NULL, 0, &xTaskHeartbeat);
+    xTaskCreatePinnedToCore(AudioPlayTask,        "AudioPlay",      5000,  NULL, 6, &xTaskAudioPlay,     1);
+    xTaskCreatePinnedToCore(WriteDisplayDataTask, "Write Display", 10000,  NULL, 4, &xTaskDisplaySerial, 1);
+    xTaskCreatePinnedToCore(SwitchCheckTask,      "Check Switch",   5000,  NULL, 4, &xTaskCheckSwitch,   1);
+    xTaskCreatePinnedToCore(CheckGLimitTask,      "Check G Limit",  2000,  NULL, 0, &xTaskGLimit,        1);
+    xTaskCreatePinnedToCore(CheckVolumeTask,      "Check Volume",   2000,  NULL, 0, &xTaskVolume,        1);
+    xTaskCreatePinnedToCore(CheckVnoChimeTask,    "Check Vno",      2000,  NULL, 0, &xTaskVnoChime,      1);
+    xTaskCreatePinnedToCore(Check3DAudioTask,     "Check 3D Audio", 2000,  NULL, 0, &xTask3dAudio,       1); // Stack size 2000
+    xTaskCreatePinnedToCore(HeartbeatLedTask,     "Heartbeat",      4000,  NULL, 0, &xTaskHeartbeat,     1); // Increased stack size
 
     //xTaskCreatePinnedToCore(TaskDummy,     "Dummy",     10000, NULL,              5, &xTaskDummy,     0);
 
@@ -266,6 +301,28 @@ void setup()
 
     // Live data server
     DataServerInit();
+
+    // Create a task for the websocket server on Core 0
+    xTaskCreatePinnedToCore(
+        DataServerTask,     // Function to call
+        "DataServer",       // Name of task
+        8000,               // Stack size
+        NULL,               // Parameter
+        2,                  // Priority
+        NULL,               // Task handle
+        0                   // Core ID (0)
+    );
+
+    // Create a task for the Web Server on Core 0 to prevent blocking other tasks
+    xTaskCreatePinnedToCore(
+        WebServerTask,      // Function to call
+        "WebServer",        // Name of task
+        10000,              // Stack size
+        NULL,               // Parameter
+        1,                  // Priority
+        NULL,               // Task handle
+        0                   // Core ID (0)
+    );
 
     g_ConsoleSerial.DisplayConsoleHelp();
 
@@ -317,8 +374,11 @@ void loop()
 
 #endif
 
-    CfgWebServerPoll();
-    DataServerPoll();
+    // CfgWebServerPoll() and DataServerPoll() are moved to WebServerTask on Core 0
+    // to prevent blocking of critical flight data processing and display updates.
+
+    // This delay is critical to prevent the loop() task from starving lower-priority tasks.
+    vTaskDelay(pdMS_TO_TICKS(10));
 
 #if 0
     // Some performance measurements
@@ -330,5 +390,3 @@ void loop()
     uLoopCount++;
 
 }  // end loop()
-
-

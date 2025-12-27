@@ -16,7 +16,7 @@ enum EnVoice
 
 enum EnAudioTone
     {
-    enToneNone, enToneDisabled, enToneLow, enToneHigh
+    enToneNone, enToneLow, enToneHigh
     };
 
 
@@ -43,8 +43,8 @@ public:
     float           fLeftGain;          // Gain control, mostly for 3D audio, nominally 1.0 but 
     float           fRightGain;         // can be higher or lower.
 
-    unsigned        uTonePulseMaxSamples;
-    unsigned        uTonePulseCounter;
+    float           fTonePulseMaxSamples;
+    float           fTonePulseCounter;
 
     I2SClass        i2s;
     int             iDataLen;           // Number of data points in the audio tone buffer. Not necessarily the buffer length!
@@ -56,7 +56,6 @@ public:
     // Methods
 public:
     void Init();
-    void inline WriteSample(int16_t iLeftValue, int16_t iRightValue);
     void SetVolume(int iVolumePercent);
     void SetGain(float fLeftGain, float fRightGain);
     void SetVoice(EnVoice enVoice);
@@ -64,6 +63,9 @@ public:
     void SetToneFreq(unsigned uToneFreq);
     void SetPulseFreq(float fPulseFreq);
     void UpdateTones();
+    bool StartAudioTest();
+    void StopAudioTest();
+    bool IsAudioTestRunning() const;
     void AudioTest();
 
 private:

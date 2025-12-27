@@ -37,6 +37,8 @@ public:
 protected:
   SpiIO       * SensorSPI;
   unsigned      uChipSel;
+  uint16_t      uLastGoodCounts      = 0;
+  bool          bHasLastGoodCounts   = false;
 
 public:
   unsigned      uCountsMin, uCountsMax;

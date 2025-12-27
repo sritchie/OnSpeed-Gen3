@@ -3,3 +3,10 @@
 Software/.DS_Store
 Software/Arduino/.DS_Store
 Software/Arduino/libraries/.DS_Store
+software/OnSpeed-Gen3-ESP32/OnSpeed_Gen3-ESP32.vcxproj
+.gitignore
+.gitignore
+.gitignore
+software/OnSpeed-Gen3-ESP32/OnSpeed_Gen3-ESP32.sln
+software/OnSpeed-Gen3-ESP32/OnSpeed_Gen3-ESP32.vcxproj.user
+software/OnSpeed-Gen3-ESP32/OnSpeed_Gen3-ESP32.vcxproj.filters

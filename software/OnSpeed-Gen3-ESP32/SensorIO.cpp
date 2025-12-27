@@ -17,6 +17,10 @@
 //int     aoaSmoothing      = 20; // AOA smoothing window (number of samples to lag)
 //int     pressureSmoothing = 15; // median filter window for pressure smoothing/despiking
 
+// Timers to reduce read frequency for less critical sensors
+static uint32_t uLastFlapsReadMs = 0;
+static uint32_t uLastOatReadMs = 0;
+
 
 // ----------------------------------------------------------------------------
 
@@ -26,6 +30,7 @@ void SensorReadTask(void *pvParams)
 {
     BaseType_t      xWasDelayed;
     TickType_t      xLastWakeTime;
+    static unsigned long uLastLateLogMs = 0;
 //    unsigned long   uStartMicros = micros();
 //    unsigned long   uCurrMicros;
 //    static unsigned uLoops = 0;
@@ -48,7 +53,12 @@ void SensorReadTask(void *pvParams)
         if (xWasDelayed == pdFALSE)
         {
             xLastWakeTime = xLAST_TICK_TIME(20);
-            g_Log.println(MsgLog::EnSensors, MsgLog::EnWarning, "SensorReadTask Late");
+            unsigned long uNow = millis();
+            if ((uNow - uLastLateLogMs) > 1000)
+            {
+                g_Log.println(MsgLog::EnSensors, MsgLog::EnWarning, "SensorReadTask Late");
+                uLastLateLogMs = uNow;
+            }
         }
 
 //        uCurrMicros = micros();
@@ -119,15 +129,22 @@ void SensorIO::Read()
     // Read IMU
     g_pIMU->Read();
 
-    // Update flaps position
-    if (g_Config.suDataSrc.enSrc != SuDataSource::EnTestPot) 
-        g_Flaps.Update();
-    else                                                     
-        g_Flaps.Update(0);
+    // Update flaps position about once per second
+    if (millis() - uLastFlapsReadMs > 1000)
+    {
+        if (g_Config.suDataSrc.enSrc != SuDataSource::EnTestPot) 
+            g_Flaps.Update();
+        else                                                     
+            g_Flaps.Update(0);
+        uLastFlapsReadMs = millis();
+    }
 
-    // Update the OAT
+    // Update the OAT about once per second
 #ifdef OAT_AVAILABLE
-    ReadOatC();
+    if (millis() - uLastOatReadMs > 1000) {
+        ReadOatC();
+        uLastOatReadMs = millis();
+    }
 #endif
 
     // Process AHRS now
@@ -152,7 +169,12 @@ void SensorIO::Read()
         AOA = CalcAOA(PfwdSmoothed,P45Smoothed, g_Flaps.iIndex, g_Config.iAoaSmoothing);
 
         // Calculate airspeed
-        PfwdPascal = ((PfwdSmoothed + g_Config.iPFwdBias - 0.1*16383) * 2/(0.8*16383) -1) * 6894.757;
+        //PfwdPascal = ((PfwdSmoothed + g_Config.iPFwdBias - 0.1*16383) * 2/(0.8*16383) -1) * 6894.757;
+        
+        // Calculate airspeed from smoothed dynamic pressure        
+        // The smoothed value is without bias, so we add it back for the PSI conversion.
+        float PfwdPSI = g_pPitot->ReadPressurePSI(PfwdSmoothed + g_Config.iPFwdBias);
+        PfwdPascal = PSI2MB(PfwdPSI) * 100; // Convert PSI to Pascals
         if (PfwdPascal > 0)
         {
             IAS = sqrt(2*PfwdPascal/1.225)* 1.94384; // knots // physics based calculation
@@ -176,8 +198,9 @@ void SensorIO::Read()
     fIasDerInput = IAS;
 #endif
     //// This logic seems suspect but this is the way it is done in the original code
-    fDecelRate =- IasDerivative.Compute();
-    fDecelRate =  fDecelRate * 10.0; 
+    // SavLayFilter returns derivative per sample; convert to kts/sec for the 20ms sensor task period.
+    const float fSensorSampleHz = 50.0f;
+    fDecelRate = -IasDerivative.Compute() * fSensorSampleHz;
 
 #ifdef LOGDATA_PRESSURE_RATE
     g_LogSensor.Write();
@@ -229,7 +252,7 @@ float SensorIO::ReadPressureAltMbars()
 float SensorIO::ReadOatC()
 {
     OatSensor.requestTemperatures();      // Send the command to get temperatures
-    OatC = OatSensor.getTempCByIndex(0);  // Read temperature in °C
+    OatC = OatSensor.getTempCByIndex(0);  // Read temperature in ï¿½C
 
     return OatC;
 }

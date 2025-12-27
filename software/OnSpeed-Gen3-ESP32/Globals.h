@@ -1,3 +1,10 @@
+// Compiling instructions:
+// From the Tools menu select at least the following...
+
+//     Flash Mode: "OPI 80 MHz"
+//     Flash Size: "32MB (256 Mb)"
+//     Partition Scheme: "32M Flash (4.8MB APP/22MB LittleFS)
+//     Upload Speed: "921600"
 
 #ifndef GLOBALS_H
 #define GLOBALS_H
@@ -14,14 +21,68 @@
 #define EXTERN_INIT(var, init)    extern var;
 #define EXTERN_CLASS(var, ...)    extern var;
 #endif
+                      
+// hardware version. We have multiple prototypes.
+#define HW_V4B // Bob's hardware
+//#define HW_V4P // Phil's hardware
 
-#define VERSION "4.0"
-// Based on OnSpeedTeensy_AHRS "3.3.7a" with later updates merged in
+#define VERSION "4.10"
 
-// AOA probe type
+// v4.10
+//Stop hard-coding VN-300 and instead initialize the EFIS serial with the configured type
+//Log files will get the correct EFIS columns
+
+// v 4.9
+// fixes for data download
+//Pauses logging during /download
+//Retries SD-mutex acquisition instead of aborting, and handles partial client.write() properly with a loop
+
+// v4.8
+//ReadPressureCounts() now accepts a sample only when uStatus==0
+
+//v4.7
+// IAS ignore < 25kts
+// Wizard Decel gauge out of whack
+// Onspeed enabled audio on start
+
+//v4.6
+//Made SD “housekeeping stalls” stop impacting critical tasks
+//Added a rate-limited warning from the low-priority writer task instead
+//Stopped holding xWriteMutex while doing any serial logging
+//ONSPEED DataMark wrapping %100
+
+// v4.5
+// switch click timing was wrong
+
+// v4.4
+//Added hardware version V4A and V4B because of the different audio DAC pins.
+//Implemented different IMU axis setup for V4P
+//NeoPixel used too much CPU, switched to simpler LED heartbeat
+//Modified task priorities and SD card buffering timeout so we don't lose sensor data
+//Fixed Bias saving config typo
+//Added functionality to read MCP3204 analog ports (flaps and volume) on V4P hardware. (code contributed by Phil)
+//Gyro bias was applied incorrectly in sensor calibration
+//Some sensor debug prints were showing junk
+//fixed tone phase rounding error, moved webserver into its own task, WebServerTask, so it doens't block. Added small delay in loop()
+//hold switch for 5 seconds for reboot
+//fixed IAS calc bias issue
+//swapping pressure ports and enabling wifi upgrades, also fixed IAS calc bias issue
+//Fixed gyro bias calibration (raw-axis bias measurement/application) to stop AHRS “tumbling” and allow it to re-level properly at rest.
+//Fixed IMU debug output corruption (printf format/args mismatch) so accel/gyro debug values are valid.
+//Fixed SD write mutex bug (double-give) that could corrupt the mutex and lead to random hangs/timeouts.
+//Hardened SD web endpoints (/download, /logs, /format) for “SD busy” conditions (no uninitialized reads/garbage writes; clearer failure behavior).
+//Kept the 20s AUDIOTEST sequence unchanged but moved it to a background task so the web UI/console stay responsive (returns “busy” if already running).
+//Prevented audio debug logging from blocking the audio path; audio task backs off if I2S init fails.
+//Fixed log replay SD file open/read/close safety under mutex.
+//Updated task scheduling: pinned audio/sensors/display/serial to core 1, split websocket vs web server polling on core 0, and lowered logging priority.
+//Increased WiFi AP TX power to improve throughput/range and page load responsiveness.
+// V4P has slightly different SD card pin assignments, got that sorted out through a define switch
+
+//Based on OnSpeedTeensy_AHRS "3.3.7a" with later updates merged in
+//AOA probe type
 //#define SPHERICAL_PROBE // uncomment this if using custom OnSpeed spherical head probe.
 
-// boom type
+//boom type
 //#define NOBOOMCHECKSUM    // for booms that don't have a checksum byte in their data stream uncomment this line.
 
 // OAT sensor available
@@ -44,8 +105,8 @@
 #include "freertos/ringbuf.h"
 
 // Arduino libraries
-#include "SdFat.h"          // https://github.com/greiman/SdFat
-#include <OneButton.h>      // button click/double click detection https://github.com/mathertel/OneButton
+#include "SdFat.h" // https://github.com/greiman/SdFat
+#include <OneButton.h>            // button click/double click detection https://github.com/mathertel/OneButton
 #include "SPI.h"
 
 // OnSpeed modules
@@ -87,13 +148,31 @@
 
 #define CS_IMU               4
 #define CS_STATIC            7
-#define CS_AOA               6
-#define CS_PITOT            15
+#define CS_AOA               15
+#define CS_PITOT             6                // needed to swap these two
 
+#ifdef HW_V4P
+// V4P includes an external MCP3204 ADC on the sensor SPI bus.
+#define CS_ADC               5
+#define ADC_CH_VOLUME        0
+#define ADC_CH_FLAP          1
+#endif
+
+#ifdef HW_V4B
 #define SD_SCLK             42
 #define SD_MISO             41
 #define SD_MOSI             40
 #define SD_CS               39
+#endif
+
+#ifdef HW_V4P // a couple of pins are swapped here
+#define SD_SCLK             41
+#define SD_MISO             42
+#define SD_MOSI             40
+#define SD_CS               39
+#endif
+
+
 
 //#define TESTPOT_PIN           A20           // pin 39 on Teensy 3.6, pin 10 on DB15
 #define VOLUME_PIN           1

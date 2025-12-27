@@ -19,6 +19,9 @@
  */
 
 #include <bit>
+#include <cstdarg>
+#include <atomic>
+
 #include <math.h>
 
 #include <Arduino.h>
@@ -41,38 +44,75 @@
 
 #include "audio.h"
 
-//i2s_data_bit_width_t  bps  = I2S_DATA_BIT_WIDTH_32BIT;
-i2s_data_bit_width_t    bps  = I2S_DATA_BIT_WIDTH_16BIT; // Only 16 seems to work well with tones
-//i2s_data_bit_width_t  bps  = I2S_DATA_BIT_WIDTH_8BIT;
+//i2s_data_bit_width_t  bps  = I2S_DATA_BIT_WIDTH_32BIT;  // 
+i2s_data_bit_width_t  bps  = I2S_DATA_BIT_WIDTH_16BIT; // Only 16 seems to work well with tones
+//i2s_data_bit_width_t  bps  = I2S_DATA_BIT_WIDTH_8BIT;  // 
 
-i2s_mode_t              mode = I2S_MODE_STD;  // Works
+i2s_mode_t            mode = I2S_MODE_STD;  // Works
 
-i2s_slot_mode_t         slot = I2S_SLOT_MODE_STEREO;    // Works better
-//i2s_slot_mode_t       slot = I2S_SLOT_MODE_MONO;      // Works
+i2s_slot_mode_t       slot = I2S_SLOT_MODE_STEREO;    // Works better
+//i2s_slot_mode_t       slot = I2S_SLOT_MODE_MONO;    // Works
 
-// Tone buffer data
-int16_t             aTone_400Hz[TONE_BUFFER_LEN];
-int16_t             aTone_1600Hz[TONE_BUFFER_LEN];
+int16_t            aTone_400Hz[TONE_BUFFER_LEN];
+int16_t            aTone_1600Hz[TONE_BUFFER_LEN];
 
-// Pin defs
-#define I2S_BCK                45
-#define I2S_DOUT               48
-#define I2S_LRCK               47
+#ifdef HW_V4P
+    #define I2S_BCK     20
+    #define I2S_DOUT    19
+    #define I2S_LRCK    8
+#else  // V4B defaults
+    #define I2S_BCK     45
+    #define I2S_DOUT    48
+    #define I2S_LRCK    47
+#endif
 
-//#define FREERTOS
+#define FREERTOS
 
 // Tone Pulse Per Sec (PPS)
 #define HIGH_TONE_STALL_PPS    20                 // how many PPS to play during stall
 #define HIGH_TONE_PPS_MAX       6.2     
 #define HIGH_TONE_PPS_MIN       1.5               // 1.5
-#define HIGH_TONE_HZ         1600                 // Freq of high tone  
+#define HIGH_TONE_HZ         1600                 // freq of high tone  
 #define LOW_TONE_PPS_MAX        8.2
 #define LOW_TONE_PPS_MIN        1.5
-#define LOW_TONE_HZ           400                 // Freq of low tone
+#define LOW_TONE_HZ           400                 // freq of low tone
 #define TONE_RAMP_TIME         15                 // millisec
 #define STALL_RAMP_TIME         5                 // millisec
 
 // ----------------------------------------------------------------------------
+
+static bool         s_bI2sOk = false;
+static volatile TaskHandle_t s_xAudioTestTask = nullptr;
+static std::atomic<bool>     s_bAudioTestStopRequested{false};
+static std::atomic<bool>     s_bAudioTestStarting{false};
+
+static void AudioLogDebugNoBlock(const char * szFmt, ...)
+    {
+    if (!g_Log.Test(MsgLog::EnAudio, MsgLog::EnDebug))
+        return;
+
+    // Never block the audio path on serial output.
+    if (!xSemaphoreTake(xSerialLogMutex, 0))
+        return;
+
+    va_list args;
+    va_start(args, szFmt);
+    Serial.print("DEBUG   Audio - ");
+    Serial.vprintf(szFmt, args);
+    va_end(args);
+
+    xSemaphoreGive(xSerialLogMutex);
+    }
+
+static void AudioTestTask(void * pvParams)
+    {
+    (void)pvParams;
+
+    g_AudioPlay.AudioTest();
+
+    s_xAudioTestTask = nullptr;
+    vTaskDelete(nullptr);
+    }
 
 /* 
 FreeRTOS task to play the appropriate noise at the appropriate time.
@@ -91,6 +131,18 @@ void AudioPlayTask(void * psuParams)
 {
     while (true)
     {
+        if (!s_bI2sOk)
+            {
+            // If I2S init failed, don't spin at high priority.
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+            }
+
+        // This would be more efficient with a semaphore but it works OK for now
+        if (g_AudioPlay.enTone == enToneNone)
+//            vTaskDelay(100 / portTICK_PERIOD_MS);
+            vTaskDelay(pdMS_TO_TICKS(100));
+
         // If a voice play has been selected then play it once. Note that PlayVoice()
         // blocks until it is finished.
         if (g_AudioPlay.enVoice != enVoiceNone)
@@ -98,10 +150,10 @@ void AudioPlayTask(void * psuParams)
             g_AudioPlay.PlayVoice();
             }
 
-        // Keep playing something even if no tone is selected to keep the audio
-        // hardware active. Note that PlayTone() blocks until it finishes writing 
-        // 100 msec of tone data.
-        g_AudioPlay.PlayTone();
+        // If there is a tone play then keep pumping out tone buffers. Note that PlayTone()
+        // blocks until it finishes writing 100 msec of tone data.
+        if (g_AudioPlay.enTone != enToneNone)
+            g_AudioPlay.PlayTone();
 
     } // end while forever
 
@@ -118,9 +170,8 @@ AudioPlay::AudioPlay()
     fLeftGain            = 1.0;
     fRightGain           = 1.0;
 
-    uTonePulseMaxSamples = 0;
-//    uTonePulseMidSamples = 0;
-    uTonePulseCounter    = 0;
+    fTonePulseMaxSamples = 0;
+    fTonePulseCounter    = 0;
 
     bAudioTest           = false;
 }
@@ -132,7 +183,8 @@ void AudioPlay::Init()
 {
     // start I2S at the sample rate with 16-bits per sample
     i2s.setPins(I2S_BCK, I2S_LRCK, I2S_DOUT);
-    if (!i2s.begin(mode, SAMPLE_RATE, bps, slot)) 
+    s_bI2sOk = i2s.begin(mode, SAMPLE_RATE, bps, slot);
+    if (!s_bI2sOk) 
     {
         g_Log.println(MsgLog::EnAudio, MsgLog::EnError, "Failed to initialize I2S!");
     }
@@ -166,28 +218,6 @@ void AudioPlay::Init()
     iDataLen = TONE_BUFFER_LEN;
 
 }
-
-// ----------------------------------------------------------------------------
-
-// Write left and write audio samples to the I2S device.
-
-void AudioPlay::WriteSample(int16_t iLeftValue, int16_t iRightValue)
-{
-    union 
-    {
-        int16_t     iSample;
-        uint8_t     abySample[2];
-    } unLeftSample, unRightSample;
-
-    unLeftSample.iSample  = iLeftValue;
-    unRightSample.iSample = iRightValue;
-
-    i2s.write(unLeftSample.abySample[0]);
-    i2s.write(unLeftSample.abySample[1]);
-    i2s.write(unRightSample.abySample[0]);
-    i2s.write(unRightSample.abySample[1]);
-}
-
 
 // ----------------------------------------------------------------------------
 
@@ -249,9 +279,9 @@ void AudioPlay::SetPulseFreq(float fPulseFreq)
 {
     // Outside limits disables tone pulse
     if ((fPulseFreq < 1.0) || (fPulseFreq > 25.0))
-        uTonePulseMaxSamples = 0;
+        fTonePulseMaxSamples = 0;
     else
-        uTonePulseMaxSamples = unsigned(SAMPLE_RATE / (fPulseFreq * 2));  // Tone period in audio samples
+        fTonePulseMaxSamples = SAMPLE_RATE / (fPulseFreq * 2.0);  // Tone period in audio samples
 
 }
 
@@ -260,15 +290,26 @@ void AudioPlay::SetPulseFreq(float fPulseFreq)
 // Play converted PCM audio buffer
 void AudioPlay::PlayPcmBuffer(const unsigned char * pData, int iDataLen, float fLeftVolume, float fRightVolume)
 {
+    if (!s_bI2sOk)
+        return;
+
     int16_t       * pPCM = (int16_t *)pData;
     int16_t         iLeftValue, iRightValue;
 
     for (int iWordIdx = 0; iWordIdx < iDataLen/2; iWordIdx++)
     {
+#if 1
         iLeftValue  = pPCM[iWordIdx] * fLeftVolume;
         iRightValue = pPCM[iWordIdx] * fRightVolume;
 
-        WriteSample(iLeftValue, iRightValue);
+        i2s.write((iLeftValue      ) & 0x00FF); // LSB first
+        i2s.write((iLeftValue  >> 8) & 0x00FF);
+        i2s.write((iRightValue     ) & 0x00FF);
+        i2s.write((iRightValue >> 8) & 0x00FF);
+#else
+        i2s.write(iLeftValue);
+        i2s.write(iRightValue);
+#endif
     }    
 }
 
@@ -277,13 +318,16 @@ void AudioPlay::PlayPcmBuffer(const unsigned char * pData, int iDataLen, float f
 // Play locally generated audio tone buffer
 void AudioPlay::PlayToneBuffer(const int16_t * pData, int iDataLen, float fLeftVolume, float fRightVolume)
 {
+    if (!s_bI2sOk)
+        return;
+
     static bool     bPulseLevel = true;
     int16_t         iLeftValue, iRightValue;
 
     for (int iWordIdx = 0; iWordIdx < iDataLen; iWordIdx++)
     {
         // Apply tone pulse modulation
-        if ((bPulseLevel == true) || (uTonePulseMaxSamples == 0))
+        if ((bPulseLevel == true) || (fTonePulseMaxSamples == 0))
         {
             iLeftValue  = pData[iWordIdx] * fLeftVolume;
             iRightValue = pData[iWordIdx] * fRightVolume;
@@ -295,16 +339,23 @@ void AudioPlay::PlayToneBuffer(const int16_t * pData, int iDataLen, float fLeftV
         }
 
         // If pulse period exceeded then change pulse level
-        if (uTonePulseCounter >= uTonePulseMaxSamples)
+        if (fTonePulseCounter >= fTonePulseMaxSamples)
         {
-            uTonePulseCounter = 0;
-            bPulseLevel       = !bPulseLevel;
+            fTonePulseCounter -= fTonePulseMaxSamples;
+            bPulseLevel        = !bPulseLevel;
         }
         else
-            uTonePulseCounter++;
+            fTonePulseCounter++;
 
-        WriteSample(iLeftValue, iRightValue);
-
+#if 1 ////// HMMM... byteswap WORKED IN THE ARDUINO ENVIRONMENT, must be C++17
+        i2s.write((iLeftValue      )  & 0x00FF); // LSB first
+        i2s.write((iLeftValue  >> 8)  & 0x00FF);
+        i2s.write((iRightValue     )  & 0x00FF);
+        i2s.write((iRightValue >> 8)  & 0x00FF);
+#else
+        i2s.write(std::byteswap(iLeftValue));
+        i2s.write(std::byteswap(iRightValue));
+#endif
     } // end for each sample in buffer
 
 }
@@ -329,7 +380,7 @@ void AudioPlay::PlayVoice()
 
 void AudioPlay::PlayVoice(EnVoice enVoice)
 {
-    g_Log.printf(MsgLog::EnAudio, MsgLog::EnDebug, "PlayVoice %d\n", enVoice);
+    AudioLogDebugNoBlock("PlayVoice %d\n", enVoice);
     // These WAV based audio clips need a volume boost
     float   fLeftVoiceVolume  = fVolume * VOICE_BOOST * fLeftGain;
     float   fRightVoiceVolume = fVolume * VOICE_BOOST * fRightGain;
@@ -367,10 +418,7 @@ void AudioPlay::PlayTone()
 
 void AudioPlay::PlayTone(EnAudioTone enAudioTone)
 {
-    if (g_bAudioEnable == false)
-        enAudioTone = enToneDisabled;
-
-    g_Log.printf(MsgLog::EnAudio, MsgLog::EnDebug, "PlayTone %d\n", enAudioTone);
+    AudioLogDebugNoBlock("PlayTone %d\n", enAudioTone);
 
     switch (enAudioTone)
     {
@@ -382,10 +430,7 @@ void AudioPlay::PlayTone(EnAudioTone enAudioTone)
             PlayToneBuffer(aTone_1600Hz, iDataLen, fVolume * fLeftGain, fVolume * fRightGain);
             break;
         
-        default: // This catches enToneNone and enToneDisabled
-            // Play 100 msec of silence
-            for (int iIdx = 0; iIdx < SAMPLE_RATE / 10; iIdx++)
-                g_AudioPlay.WriteSample(0, 0);
+        default :
             break;
     }
 }
@@ -405,9 +450,8 @@ void AudioPlay::UpdateTones()
     if (g_Sensors.IAS <= g_Config.iMuteAudioUnderIAS)
         {
 #ifdef TONEDEBUG
-        // show audio muted and debug info.
-        sprintf(tempBuf, "AUDIO MUTED: Airspeed too low. Min:%i IAS:%.2f",muteAudioUnderIAS, IAS);
-        Serial.println(tempBuf);
+        AudioLogDebugNoBlock("AUDIO MUTED: Airspeed too low. Min:%i IAS:%.2f\n",
+            g_Config.iMuteAudioUnderIAS, g_Sensors.IAS);
 #endif
         SetTone(enToneNone);
         SetPulseFreq(20); // set the update rate to LOW_TONE_PPS_MAX if no tone is playing to pick up a pulsed tone quickly
@@ -461,54 +505,141 @@ void AudioPlay::UpdateTones()
 
 // ----------------------------------------------------------------------------
 
+bool AudioPlay::StartAudioTest()
+{
+    bool expected = false;
+    if (!s_bAudioTestStarting.compare_exchange_strong(expected, true))
+        return false;
+
+    if (s_xAudioTestTask != nullptr)
+        {
+        s_bAudioTestStarting.store(false);
+        return false;
+        }
+
+    s_bAudioTestStopRequested.store(false);
+
+    TaskHandle_t newTask = nullptr;
+
+    BaseType_t status = xTaskCreatePinnedToCore(
+        AudioTestTask,
+        "AudioTest",
+        3000,
+        nullptr,
+        1,
+        &newTask,
+        0);
+
+    if (status != pdPASS)
+        {
+        s_xAudioTestTask = nullptr;
+        s_bAudioTestStarting.store(false);
+        return false;
+        }
+
+    s_xAudioTestTask = newTask;
+    s_bAudioTestStarting.store(false);
+    return true;
+}
+
+// ----------------------------------------------------------------------------
+
+void AudioPlay::StopAudioTest()
+{
+    if (!IsAudioTestRunning())
+        return;
+
+    s_bAudioTestStopRequested.store(true);
+
+    // Stop any continuous tone quickly (voice clips are allowed to finish).
+    SetPulseFreq(0);
+    SetTone(enToneNone);
+    SetVoice(enVoiceNone);
+}
+
+// ----------------------------------------------------------------------------
+
+bool AudioPlay::IsAudioTestRunning() const
+{
+    return (s_xAudioTestTask != nullptr) || s_bAudioTestStarting.load();
+}
+
+// ----------------------------------------------------------------------------
+
 void AudioPlay::AudioTest()
 {
     bAudioTest = true;
+    s_bAudioTestStopRequested.store(false);
+
+    auto DelayOrStop = [&](uint32_t delayMs) -> bool
+        {
+        TickType_t remaining = pdMS_TO_TICKS(delayMs);
+        while (remaining > 0)
+            {
+            if (s_bAudioTestStopRequested.load())
+                {
+                SetPulseFreq(0);
+                SetTone(enToneNone);
+                SetVoice(enVoiceNone);
+                return false;
+                }
+
+            TickType_t slice = remaining > pdMS_TO_TICKS(50) ? pdMS_TO_TICKS(50) : remaining;
+            vTaskDelay(slice);
+            remaining -= slice;
+            }
+
+        return !s_bAudioTestStopRequested.load();
+        };
+
+    if (s_bAudioTestStopRequested.load())
+        goto done;
 
 //    pSerial->printf("Left Voice\n");
     g_AudioPlay.SetVoice(enVoiceLeft);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    if (!DelayOrStop(2000)) goto done;
 
 //    pSerial->printf("Right Voice\n");
     g_AudioPlay.SetVoice(enVoiceRight);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    if (!DelayOrStop(2000)) goto done;
 
 //    pSerial->printf("Tone LOW\n");
     g_AudioPlay.SetTone(enToneLow);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    if (!DelayOrStop(2000)) goto done;
     
 //    pSerial->printf("G Limit\n");
     g_AudioPlay.SetVoice(enVoiceGLimit);
-    vTaskDelay(3000 / portTICK_PERIOD_MS);
+    if (!DelayOrStop(3000)) goto done;
 
 //    pSerial->printf("Tone HIGH\n");
     g_AudioPlay.SetTone(enToneHigh);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    if (!DelayOrStop(2000)) goto done;
     
 //    pSerial->printf("Tone LOW\n");
     g_AudioPlay.SetTone(enToneLow);
-    vTaskDelay(1500 / portTICK_PERIOD_MS);
+    if (!DelayOrStop(1500)) goto done;
 
 //    pSerial->printf("Pulse 2.0 Hz\n");
     g_AudioPlay.SetPulseFreq(3.0);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    if (!DelayOrStop(2000)) goto done;
 
 //    pSerial->printf("Pulse 4.0 Hz\n");
     g_AudioPlay.SetPulseFreq(3.0);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    if (!DelayOrStop(2000)) goto done;
     
 //    pSerial->printf("Pulse 4.0 Hz\n");
     g_AudioPlay.SetPulseFreq(5.0);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    if (!DelayOrStop(2000)) goto done;
 
 //    pSerial->printf("Tone HIGH\n");
     g_AudioPlay.SetTone(enToneHigh);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    if (!DelayOrStop(2000)) goto done;
     
 //    pSerial->printf("Pulse 3.0 Hz\n");
     g_AudioPlay.SetPulseFreq(4.0);
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    if (!DelayOrStop(2000)) goto done;
 
+done:
 //    pSerial->printf("Tone OFF, Pulse 4.0 Hz\n");
     g_AudioPlay.SetPulseFreq(3.0);
     g_AudioPlay.SetPulseFreq(0);
@@ -517,4 +648,5 @@ void AudioPlay::AudioTest()
     g_AudioPlay.SetTone(enToneNone);
 
     bAudioTest = false;
+    s_bAudioTestStopRequested.store(false);
 }

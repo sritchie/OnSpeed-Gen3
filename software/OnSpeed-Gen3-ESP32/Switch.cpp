@@ -1,5 +1,6 @@
 
 #include "Globals.h"
+#include "Helpers.h"
 #include "Switch.h"
 
 // Switch State
@@ -10,6 +11,20 @@ BaseType_t  xWasDelayed;
 TickType_t  xLastWakeTime = xTaskGetTickCount();
 
 // ----------------------------------------------------------------------------
+
+// Reboot the system after playing a sound and logging the event.
+void RebootFromSwitch()
+{
+    g_Log.println(MsgLog::EnSwitch, MsgLog::EnDebug, "Reboot triggered by 5-second switch press.");
+    
+    // Play a sound to indicate reboot is happening. Using an existing sound as a placeholder.
+    // For a better user experience, you could add a new "rebooting" voice prompt.
+    // g_AudioPlay.SetVoice(enVoiceCalMode);
+
+    // Wait a moment for the user to hear the sound before restarting.
+    // vTaskDelay(pdMS_TO_TICKS(1000));
+    _softRestart();
+}
 
 // This is the main OneButton task to handle switch presses.
 // This same functionality would probably be trivial to duplicate without
@@ -22,7 +37,9 @@ void SwitchCheckTask(void * pvParams)
 
     // Setup OneButton switch
     pinMode(SWITCH_PIN,   INPUT_PULLUP);
-    g_Switch.setPressTicks(1000); // long press time
+    // OneButton press timing values are in milliseconds (not "tick()" calls).
+    // 1 second long-press for DataMark.
+    g_Switch.setPressMs(1000);
     g_Switch.attachClick(SwitchSingleClick);
     g_Switch.attachLongPressStart(SwitchLongPress);
 
@@ -41,7 +58,7 @@ void SwitchCheckTask(void * pvParams)
             bSwitchDoSingleClick = false;
             }
 
-        // Check for a long press event
+        // Check for a long press event (1 second)
         if (bSwitchDoLongPress)
             {
             g_iDataMark++;
@@ -49,6 +66,14 @@ void SwitchCheckTask(void * pvParams)
             g_AudioPlay.SetVoice(enVoiceDatamark);
             bSwitchDoLongPress = false;
             }
+
+        // Check for a very long press (5 seconds) to trigger a reboot.
+        // getPressedMs() returns the number of milliseconds the button is pressed.
+        if (g_Switch.isLongPressed() && (g_Switch.getPressedMs() > 5000))
+        {
+            // This function will not return.
+            RebootFromSwitch();
+        }
         } // end while forever
     }
 
@@ -65,9 +90,7 @@ void ToggleAudioEnable()
     if (g_bAudioEnable)
         {
         // Turn on knob LED. No analog output with ESP32.
-        digitalWrite(PIN_LED_KNOB, 1);
-//        analogWrite(PIN_LED_KNOB,200); No analog output with ESP32
-
+        // The HeartbeatLedTask handles the LED state based on g_bAudioEnable.
         // Play turn on sound
         g_AudioPlay.SetVoice(enVoiceEnabled);
 
@@ -76,9 +99,7 @@ void ToggleAudioEnable()
     else
         {
         // Turn off knob LED
-        digitalWrite(PIN_LED_KNOB, 1);
-//        analogWrite(PIN_LED_KNOB, 0);
-
+        // The HeartbeatLedTask handles the LED state based on g_bAudioEnable.
         // Play turn off sound
         g_AudioPlay.SetVoice(enVoiceDisabled);
 

@@ -136,8 +136,9 @@ void IMU330::Read()
     Gz = *pfGz * fGzSign;
 #endif
 
-    g_Log.printf(MsgLog::EnIMU, MsgLog::EnDebug, "Ax %.3f, Ay %.3f, Az %.3f, Gx %.4f, Gy %.4f, Gz %.4f, %.2f\n",
-        Gx,Gy,Gz, fTempC);
+    g_Log.printf(MsgLog::EnIMU, MsgLog::EnDebug,
+        "Ax %.3f, Ay %.3f, Az %.3f, Gx %.4f, Gy %.4f, Gz %.4f, Temp %.2fC\n",
+        Ax, Ay, Az, Gx, Gy, Gz, fTempC);
 
 #ifdef LOGDATA_IMU_RATE
     logData();
@@ -246,37 +247,38 @@ void IMU330::ConfigAxes()
     sForwardGloadAxis  = "";
 
       // {sPortsOrientation, sBoxtopOrientation, sVerticalGloadAxis, sLateralGloadAxis, sForwardGloadAxis}
-#if 0
-      // This is the orientation for the V3 box
-      // X and Y axes are swapped on this chip
+#ifdef HW_V4P
     String axisMapArray[24][5] = {
-      {"FORWARD", "LEFT",     "X","-Z", "Y"}, // Paul's , fixed (used to be +Z)
+        // This is the orientation for the V4P box
+        // IMU inside the V4P box is rotated relative to the V4B box:
+        // V4P(X)=V4B(-Y)  V4P(Y)=V4B(-X)  V4P(Z)=V4B(-Z)
+      {"FORWARD", "LEFT",     "X","-Z", "Y"},
       {"FORWARD", "RIGHT",   "-X", "Z", "Y"},
-      {"FORWARD", "UP",       "Z", "X", "Y"}, // Vac's RV-4
+      {"FORWARD", "UP",       "Z", "X", "Y"},
       {"FORWARD", "DOWN",    "-Z","-X", "Y"},
 
       {"AFT",     "LEFT",    "-X","-Z","-Y"},
       {"AFT",     "RIGHT",    "X", "Z","-Y"},
-      {"AFT",     "UP",       "Z","-X","-Y"}, // bench box
+      {"AFT",     "UP",       "Z","-X","-Y"},
       {"AFT",     "DOWN",    "-Z", "X","-Y"},
 
       {"LEFT",    "FORWARD", "-X","-Y", "Z"},
       {"LEFT",    "AFT",      "X","-Y","-Z"},
-      {"LEFT",    "UP",       "Z","-Y", "X"}, // Zlin Z-50
-      {"LEFT",    "DOWN",    "-Z","-Y", "X"},
+      {"LEFT",    "UP",       "Z","-Y", "X"},
+      {"LEFT",    "DOWN",    "-Z","-Y","-X"},
 
       {"RIGHT",   "FORWARD",  "X", "Y", "Z"},
       {"RIGHT",   "AFT",     "-X", "Y","-Z"},
       {"RIGHT",   "UP",       "Z", "Y","-X"},
-      {"RIGHT",   "DOWN",    "-Z", "Y", "X"}, // Tron's RV-8
+      {"RIGHT",   "DOWN",    "-Z", "Y", "X"},
 
       {"UP",      "FORWARD",  "Y","-X", "Z"},
       {"UP",      "AFT",      "Y", "X","-Z"},
       {"UP",      "LEFT",     "Y","-Z","-X"},
-      {"UP",      "RIGHT",    "Y", "Z", "X"}, // Doc's box on Vac's RV-4
+      {"UP",      "RIGHT",    "Y", "Z", "X"},
 
       {"DOWN",    "FORWARD", "-Y", "X", "Z"},
-      {"DOWN",    "AFT",     "-Y","-X","-Z"}, // Lenny's RV-10
+      {"DOWN",    "AFT",     "-Y","-X","-Z"},
       {"DOWN",    "LEFT",    "-Y","-Z", "X"},
       {"DOWN",    "RIGHT",   "-Y", "Z","-X"}
       };

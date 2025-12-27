@@ -16,14 +16,18 @@ float mapfloat(float x, float in_min, float in_max, float out_min, float out_max
 
 void _softRestart() 
 {
-    
-    if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(100))) 
+    g_Log.println(MsgLog::EnMain, MsgLog::EnDebug, "System restarting...");
+
+    // Attempt to gracefully close the log file before restarting.
+    // Wait up to 1 second to acquire the lock. If the disk is busy, we might not get it, but we'll reboot anyway.
+    if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(1000))) 
     {
         g_LogSensor.Close();
-        Serial.end();  //clears the serial monitor  if used
-        delay(1000);
-        esp_restart();
+        xSemaphoreGive(xWriteMutex);
     }
+    Serial.end();  //clears the serial monitor if used
+    delay(100);
+    esp_restart();
 }
 
 // --------------------------------------------------
@@ -35,4 +39,3 @@ uint32_t freeMemory()
 
 
 // --------------------------------------------------
-

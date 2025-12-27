@@ -2,7 +2,7 @@
 // More details at
 //      http://www.flyOnSpeed.org
 //      and
-//      https://github.com/flyonspeed/OnSpeed-Gen2/
+//      https://github.com/flyonspeed/OnSpeed-Gen3/
 
 // OnSpeed Wifi - Wifi file server, config manager and debug display for ONSPEED Gen 2 v2,v3 boxes.
 
@@ -26,7 +26,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
-//#include <ArduinoJson.h>
+#include <ArduinoJson.h>
 
 #include "Globals.h"
 
@@ -103,6 +103,11 @@ void HandleFormat();
 void HandleLogs();
 void HandleDelete();
 void HandleDownload();
+void HandleWifiReflash();
+void HandleUpgrade();
+void HandleUpgradeSuccess();
+void HandleUpgradeFailure();
+
 
 #ifdef SUPPORT_WIFI_CLIENT
 void HandleWifiSettings();
@@ -142,10 +147,13 @@ void CfgWebServerInit()
 #endif
 
     //WiFi.disconnect();
+    delay(10);
+    WiFi.setTxPower(WIFI_POWER_11dBm);
     WiFi.softAP(szSSID, szPassword);
 
     // Wait after init softAP
-    delay(100); 
+    delay(100);
+    
 
     IPAddress    Ip(192, 168,   0, 1);
     IPAddress NMask(255, 255, 255, 0);
@@ -175,16 +183,13 @@ void CfgWebServerInit()
     CfgServer.on("/delete",          HTTP_GET,  HandleDelete);
     CfgServer.on("/download",        HTTP_GET,  HandleDownload);
 
-#if 0
-    CfgServer.on("/wifireflash",     HTTP_GET,  HandleWifiReflash);
+//    CfgServer.on("/wifireflash",     HTTP_GET,  HandleWifiReflash);
     CfgServer.on("/upgrade",         HTTP_GET,  HandleUpgrade);
-#endif
 
 #ifdef SUPPORT_WIFI_CLIENT
     CfgServer.on("/wifi",            HTTP_GET,  HandleWifiSettings);
 #endif
 
-#if 0
     // Handling uploading firmware file
     CfgServer.on("/upload", HTTP_POST,
         []()
@@ -229,28 +234,23 @@ void CfgWebServerInit()
                 }
             } // end second lambda expression
         );
-#endif
-
 #if 0
     // Called when the url is not defined here
     CfgServer.onNotFound(
         []()
-            {
+            { 
             if (!HandleFileRead(CfgServer.uri()))
                 CfgServer.send(404, "text/plain", "File Not Found");
             }
         );
 #endif
-
     // Start server
     CfgServer.begin();
 
     if (MDNS.begin("onspeed"))
         MDNS.addService("http", "tcp", 80);
-    DnsServer.start(53, "onspeed.local",  Ip);
-
-    WiFi.setTxPower(WIFI_POWER_2dBm);
-
+    // DnsServer.start(53, "onspeed.local",  Ip);
+    
     } // end setup()
 
 
@@ -290,6 +290,7 @@ void HandleIndex()
     String      sPage;
 
     UpdateHeader();
+    sPage.reserve(pageHeader.length() + 1024);
     sPage += pageHeader;
     sPage += "<br><br>\n"
         "<strong>Welcome to the OnSpeed Wifi gateway.</strong><br><br>\n"
@@ -315,8 +316,9 @@ void HandleFavicon()
 
 void HandleReboot()
   {
-    String sPage = "";
+    String sPage;
     UpdateHeader();
+    sPage.reserve(pageHeader.length() + 1024);
     sPage += pageHeader;
 
     if (CfgServer.arg("confirm").indexOf("yes") < 0)
@@ -347,10 +349,11 @@ void HandleReboot()
 
 void HandleLive()
     {
-    String sPage = "";
+    String sPage;
     UpdateHeader();
+    sPage.reserve(pageHeader.length() + sizeof(htmlLiveView) + pageFooter.length());
     sPage += pageHeader;
-    sPage += String(htmlLiveView);
+    sPage += htmlLiveView;
     sPage += pageFooter;
     CfgServer.send(200, "text/html", sPage);
     }
@@ -359,10 +362,11 @@ void HandleLive()
 
 void HandleConfig()
     {
-    String sPage = "";
+    String sPage;
 //    String sConfigString = "";
 
     UpdateHeader();
+    sPage.reserve(pageHeader.length() + 16384);
     sPage += pageHeader;
 
     // Get live values script
@@ -467,6 +471,144 @@ function GetValue(ValueName) {
         return null;
         }
     }
+)#";
+
+    // Audio test start/stop support (toggle button + status polling)
+    sPage += R"#(
+let gAudioTestPollTimer = null;
+
+function GetValueAsync(ValueName, callback)
+    {
+    const xhr = new XMLHttpRequest();
+    xhr.onreadystatechange = function()
+        {
+        if (xhr.readyState === 4)
+            {
+            if (xhr.status === 200)
+                callback(xhr.responseText);
+            else
+                callback(null);
+            }
+        };
+    xhr.open("GET", "/getvalue?name=" + ValueName, true);
+    xhr.send(null);
+    }
+
+function AudioTestSetButton(SenderID, state)
+    {
+    const btn = document.getElementById(SenderID);
+    if (!btn)
+        return;
+
+    btn.dataset.audiotestState = state;
+
+    if (state === "running")
+        {
+        btn.value = "Stop";
+        btn.disabled = false;
+        }
+    else if (state === "stopping")
+        {
+        btn.value = "Stopping...";
+        btn.disabled = true;
+        }
+    else
+        {
+        btn.value = "Test Audio";
+        btn.disabled = false;
+        }
+    }
+
+function AudioTestStopPolling()
+    {
+    if (gAudioTestPollTimer !== null)
+        {
+        clearInterval(gAudioTestPollTimer);
+        gAudioTestPollTimer = null;
+        }
+    }
+
+function AudioTestStartPolling(SenderID)
+    {
+    AudioTestStopPolling();
+    gAudioTestPollTimer = setInterval(function()
+        {
+        GetValueAsync("AUDIOTESTSTATUS", function(resp)
+            {
+            if (resp === null)
+                return;
+
+            if (resp.trim() === "RUNNING")
+                {
+                AudioTestSetButton(SenderID, "running");
+                }
+            else
+                {
+                AudioTestSetButton(SenderID, "idle");
+                AudioTestStopPolling();
+                }
+            });
+        }, 400);
+    }
+
+function ToggleAudioTest(SenderID)
+    {
+    const btn = document.getElementById(SenderID);
+    if (!btn)
+        return;
+
+    const state = btn.dataset.audiotestState || "idle";
+
+    if (state === "running" || state === "stopping")
+        {
+        AudioTestSetButton(SenderID, "stopping");
+        GetValueAsync("AUDIOTESTSTOP", function(_resp)
+            {
+            AudioTestStartPolling(SenderID);
+            });
+        }
+    else
+        {
+        btn.disabled = true;
+        btn.value = "Starting...";
+
+        GetValueAsync("AUDIOTEST", function(resp)
+            {
+            if (resp === null)
+                {
+                AudioTestSetButton(SenderID, "idle");
+                return;
+                }
+
+            // Treat "busy" as already running.
+            AudioTestSetButton(SenderID, "running");
+            AudioTestStartPolling(SenderID);
+            });
+        }
+    }
+
+window.addEventListener('load', function()
+    {
+    const btn = document.getElementById('id_volumeTestButton');
+    if (!btn)
+        return;
+
+    btn.dataset.audiotestState = "idle";
+
+    // Sync initial state if a test was started from elsewhere (e.g. console)
+    GetValueAsync("AUDIOTESTSTATUS", function(resp)
+        {
+        if (resp !== null && resp.trim() === "RUNNING")
+            {
+            AudioTestSetButton(btn.id, "running");
+            AudioTestStartPolling(btn.id);
+            }
+        else
+            {
+            AudioTestSetButton(btn.id, "idle");
+            }
+        });
+    });
 )#";
 
     sPage += R"#(
@@ -870,7 +1012,7 @@ R"#(        </section>)#" "\n";
         </div>
         <div class="form-divs flex-col-3">
             <label for="id_volumeTestButton">&nbsp;</label>
-            <input id="id_volumeTestButton" name="volumeTestButton" type="button" value="Test Audio" class="greybutton" onclick="FillInValue(this.id,'AUDIOTEST','')"/>
+            <input id="id_volumeTestButton" name="volumeTestButton" type="button" value="Test Audio" class="greybutton" onclick="ToggleAudioTest(this.id)"/>
         </div>
         <div class="form-divs flex-col-4 volumepossetting" )#" + String(volumeLevelsVisibility) + R"#(>
             <label for="id_volumeLowAnalog">Low Vol. value</label>
@@ -1392,10 +1534,12 @@ void HandleConfigSave()
     // Handle regular save
     else
         {
-        String sPage   = "";
+        String sPage;
         String sConfig = "";
 
         UpdateHeader();
+        sPage.reserve(pageHeader.length() + 1024);
+        sConfig.reserve(1024);
         sPage += pageHeader;
 
         // Save configuration. Maybe specify a config file name someday. Default for now.
@@ -1421,9 +1565,10 @@ void HandleConfigSave()
 
 void HandleDefaultConfig()
     {
-    String sPage = "";
+    String sPage;
 
     UpdateHeader();
+    sPage.reserve(pageHeader.length() + 1024);
     sPage += pageHeader;
 
     if (CfgServer.hasArg("confirm") && CfgServer.arg("confirm")=="yes")
@@ -1474,6 +1619,7 @@ void HandleConfigUpload()
     else if (uploadFile.status == UPLOAD_FILE_WRITE)
         {
         if (xSemaphoreTake(uploadMutex, portMAX_DELAY)) {
+            sUploadedConfigString.reserve(sUploadedConfigString.length() + uploadFile.currentSize);
             for (unsigned int i = 0; i < uploadFile.currentSize; i++) {
                 sUploadedConfigString += char(uploadFile.buf[i]);
                 }
@@ -1505,9 +1651,10 @@ void HandleConfigUpload()
 
 void HandleFinalUpload()
     {
-    String sPage = "";
+    String sPage;
 
     UpdateHeader();
+    sPage.reserve(pageHeader.length() + 2048);
     sPage += pageHeader;
 
     if (xSemaphoreTake(uploadMutex, portMAX_DELAY)) 
@@ -1535,8 +1682,9 @@ void HandleFinalUpload()
 
 void HandleSensorConfig()
     {
-    String  sPage = "";
+    String  sPage;
     UpdateHeader();
+    sPage.reserve(pageHeader.length() + 8192);
     sPage += pageHeader;
 
     // First time through, no "yes" calibration confirm
@@ -1626,9 +1774,12 @@ sPage += R"#(
         float   aVertTotal      = 0.00;
         float   aLatTotal       = 0.00;
         float   aFwdTotal       = 0.00;
-        float   gxTotal         = 0.00;
-        float   gyTotal         = 0.00;
-        float   gzTotal         = 0.00;
+        // Gyro biases are applied in raw IMU axes (fGyroX/Y/Z) before any
+        // aircraft-orientation remapping/sign is applied. So measure biases in
+        // raw axes here as well to avoid sign/mapping errors.
+        float   fGyroXTotal      = 0.00;
+        float   fGyroYTotal      = 0.00;
+        float   fGyroZTotal      = 0.00;
         int     sensorReadCount = 150;
 
         for (int i=0; i < sensorReadCount; i++)
@@ -1643,11 +1794,13 @@ sPage += R"#(
             aFwdTotal  += g_pIMU->Ax;   // All in aircraft orientation
             aLatTotal  += g_pIMU->Ay;
             aVertTotal += g_pIMU->Az;
-            gxTotal    += g_pIMU->Gx;
-            gyTotal    += g_pIMU->Gy;
-            gzTotal    += g_pIMU->Gz;
+            // Raw gyro rates in IMU axes (deg/sec), without bias correction
+            fGyroXTotal += g_pIMU->fGyroX;
+            fGyroYTotal += g_pIMU->fGyroY;
+            fGyroZTotal += g_pIMU->fGyroZ;
 
-            delayMicroseconds(4808);
+            // Avoid a tight busy-wait inside the web handler; yield to keep WiFi/core-0 responsive.
+            vTaskDelay(pdMS_TO_TICKS(5));
             xSemaphoreGive(xSensorMutex);
             }
 
@@ -1669,9 +1822,10 @@ sPage += R"#(
 
         g_Log.printf(MsgLog::EnWebServer, MsgLog::EnDebug, "Measured Static %8.3f mb Calculated Static %8.3f mb Bias %6.3f\n", fMeasuredStaticMB, fCalculatedStaticMB, g_Config.fPStaticBias);
 
-        g_Config.fGxBias = -gxTotal/sensorReadCount;
-        g_Config.fGyBias = -gyTotal/sensorReadCount;
-        g_Config.fGzBias = -gzTotal/sensorReadCount;
+        // Biases are stored/applied in raw IMU axes.
+        g_Config.fGxBias = -fGyroXTotal / sensorReadCount;
+        g_Config.fGyBias = -fGyroYTotal / sensorReadCount;
+        g_Config.fGzBias = -fGyroZTotal / sensorReadCount;
 
         g_Config.SaveConfigurationToFile();
 
@@ -1717,17 +1871,16 @@ sPage += R"#(
 
 
 // ----------------------------------------------------------------------------
-#if 0
-
 void HandleWifiReflash()
     {
-    String sPage = "";
+    String sPage;
     UpdateHeader();
+    sPage.reserve(pageHeader.length() + 1024);
     sPage += pageHeader;
     sPage += "<br><br><p>Wifi reflash mode disables the Teensy's serial port to enable reflashing the Wifi chip via its microUSB port.\
     <br><br><span style=\"color:red\">This mode is now activated until reboot.</span></p>";
     sPage += pageFooter;
-    sendSerialCommand("$WIFIREFLASH!");
+//    sendSerialCommand("$WIFIREFLASH!");
     CfgServer.send(200, "text/html", sPage);
     }
 
@@ -1735,15 +1888,16 @@ void HandleWifiReflash()
 
 void HandleUpgrade()
     {
-    String sPage = "";
+    String sPage;
     UpdateHeader();
+    sPage.reserve(pageHeader.length() + 1024);
     sPage += pageHeader;
     sPage += "<br><br><p>Upgrade Wifi module firmware via binary (.bin) file upload\
     <br><br><br>";
-    sPage += "<form method='POST' action='/upload' enctype='multipart/form-data' id='upload_form'>\
-    <input type='file' name='update'><br><br>\
-    <input class='redbutton' type='submit' value='Upload'>\
-    </form>";
+    sPage += R"rawliteral(<form method='POST' action='/upload' enctype='multipart/form-data' id='upload_form'>
+    <input type='file' name='update'><br><br>
+    <input class='redbutton' type='submit' value='Upload'>
+    </form>)rawliteral";
     sPage += pageFooter;
 
     CfgServer.send(200, "text/html", sPage);
@@ -1753,8 +1907,9 @@ void HandleUpgrade()
 
 void HandleUpgradeSuccess()
     {
-    String sPage = "";
+    String sPage;
     UpdateHeader();
+    sPage.reserve(pageHeader.length() + 2048);
     sPage += pageHeader;
     sPage += "<br><br><br><br><span style=\"color:black\">Firmware upgrade complete. Wait a few seconds until OnSpeed reboots.</span></p><br><br><br><br>";
     sPage += "<script>setInterval(function () { document.getElementById('rebootprogress').value+=0.1; document.getElementById('rebootprogress').innerHTML=document.getElementById('rebootprogress').value+'%'}, 10);setTimeout(function () { window.location.href = \"/\";}, 10000);</script>";
@@ -1768,14 +1923,14 @@ void HandleUpgradeSuccess()
 
 void HandleUpgradeFailure()
     {
-    String sPage = "";
+    String sPage;
     UpdateHeader();
+    sPage.reserve(pageHeader.length() + 1024);
     sPage += pageHeader;
     sPage += "<br><br><br><br><span style=\"color:red\">Firmware upgrade failed. Power cycle OnSpeed box and try again.</span></p><br><br><br><br>";
     sPage += pageFooter;
     CfgServer.send(200, "text/html", sPage);
     }
-#endif
 
 // ----------------------------------------------------------------------------
 
@@ -1819,10 +1974,25 @@ void HandleGetValue()
 
         else if (CfgServer.arg("name") == "AUDIOTEST")
             {
-            g_AudioPlay.AudioTest();
-            sResponseValue = "Test Audio"; // Not really used
+            bool bStarted = g_AudioPlay.StartAudioTest();
+            sResponseValue = bStarted ? "Test Audio" : "Audio Test Busy"; // Not really used
             CfgServer.send(200, "text/plain", sResponseValue);
             g_Log.println(MsgLog::EnWebServer, MsgLog::EnDebug, "Reqeust AUDIOTEST");
+            }
+
+        else if (CfgServer.arg("name") == "AUDIOTESTSTOP")
+            {
+            g_AudioPlay.StopAudioTest();
+            sResponseValue = "Stopping";
+            CfgServer.send(200, "text/plain", sResponseValue);
+            g_Log.println(MsgLog::EnWebServer, MsgLog::EnDebug, "Request AUDIOTESTSTOP");
+            }
+
+        else if (CfgServer.arg("name") == "AUDIOTESTSTATUS")
+            {
+            sResponseValue = g_AudioPlay.IsAudioTestRunning() ? "RUNNING" : "IDLE";
+            CfgServer.send(200, "text/plain", sResponseValue);
+            // Intentionally no log here; UI may poll frequently.
             }
 
         else
@@ -1845,8 +2015,9 @@ void HandleGetValue()
 
 void HandleFormat()
     {
-    String sPage = "";
+    String sPage;
     UpdateHeader();
+    sPage.reserve(pageHeader.length() + 2048);
     sPage += pageHeader;
 
     if (CfgServer.arg("confirm").indexOf("yes")<0)
@@ -1860,10 +2031,10 @@ void HandleFormat()
 
     else
         {
-        bool    bFormatStatus;
+        bool    bFormatStatus = false;
 //        String formatResponse;
 
-        if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(100))) 
+        if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(1000))) 
             {
             bool bOrigSdLogging = g_Config.bSdLogging;
 
@@ -1888,6 +2059,10 @@ void HandleFormat()
             // Put the configuration file back onto the card
             // Semaphore is handled in the function call
             g_Config.SaveConfigurationToFile();
+            }
+        else
+            {
+            g_Log.println(MsgLog::EnWebServer, MsgLog::EnWarning, "FORMAT - SD busy (xWriteMutex)");
             }
 
         // Format OK
@@ -1922,9 +2097,11 @@ void HandleCalWizard()
     if (CfgServer.hasArg("step") && CfgServer.arg("step") != "")
         wizardStep=CfgServer.arg("step");
 
-    String sPage    = "";
-    String scripts = "";
+    String sPage;
+    String scripts;
     UpdateHeader();
+    sPage.reserve(pageHeader.length() + 16384);
+    scripts.reserve(2048);
     sPage += pageHeader;
 
     if (wizardStep == "")
@@ -2236,41 +2413,54 @@ void HandleWifiSettings()
 void HandleLogs() 
     {
     SdFileSys::SuFileInfoList   suFileList;
-    bool        bListStatus;
+    bool        bListStatus = false;
     String      sFileLine = "";
-    String      sPage    = "";
+    String      sPage;
 
     UpdateHeader();
+    sPage.reserve(pageHeader.length() + 8192);
     sPage += pageHeader;
 //    sPage += "<p>Available log files:</p>\n";
     sPage += "<br>\n";
 
     // Iterate over log file names here
-    if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(100))) 
-        {
-        bListStatus = g_SdFileSys.FileList(&suFileList);
-        xSemaphoreGive(xWriteMutex);
-        }
+    {
+        // Pause logging while listing files to reduce SD contention.
+        struct PauseGuard
+            {
+            bool bPrevPause;
+            PauseGuard() : bPrevPause(g_bPause) { g_bPause = true; }
+            ~PauseGuard() { g_bPause = bPrevPause; }
+            } pauseGuard;
+
+        if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(2000)))
+            {
+            bListStatus = g_SdFileSys.FileList(&suFileList);
+            xSemaphoreGive(xWriteMutex);
+            }
+        else
+            {
+            g_Log.println(MsgLog::EnWebServer, MsgLog::EnWarning, "LOGS - SD busy (xWriteMutex)");
+            }
+    }
 
     sPage += "<table>\n";
     if (bListStatus == true)
         for (int iIdx=0; iIdx<suFileList.size(); iIdx++)
             {
             sFileLine  = "<tr><td><a href=\"/download?file=";
-            sFileLine += String(suFileList[iIdx].szFileName);
+            sFileLine += suFileList[iIdx].szFileName;
             sFileLine += "\">";
-            sFileLine += String(suFileList[iIdx].szFileName);
+            sFileLine += suFileList[iIdx].szFileName;
             sFileLine += "</a>";
             sFileLine += "</td>";
 
             sFileLine += "<td style=\"padding-left: 20px;text-align: right;\">";
-            char filesize_char[12];
-            sprintf(filesize_char, "%'ld", suFileList[iIdx].uFileSize);
             sFileLine += sFormatBytes(suFileList[iIdx].uFileSize);
             sFileLine += "</td>";
 
             sFileLine += "<td>&nbsp;&nbsp;&nbsp;<a href=\"/delete?file=";
-            sFileLine += String(suFileList[iIdx].szFileName);
+            sFileLine += suFileList[iIdx].szFileName;
             sFileLine += "\">";
             sFileLine += szHtmlTrashcan;
             sFileLine += "</a>";
@@ -2281,6 +2471,10 @@ void HandleLogs()
             sPage     += sFileLine;
 //            fileCount++;
             } // end for all files in the list
+    else
+        {
+        sPage += "<tr><td><br><br><span style=\"color:red\">SD card busy or not available.</span></td></tr>\n";
+        }
     sPage += "</table>\n";
 
     sPage += pageFooter;
@@ -2307,8 +2501,9 @@ void HandleDelete()
     // File delete not yet confirmed
     if (CfgServer.arg("confirm").indexOf("yes") < 0)
         {
-        String sPage = "";
+        String sPage;
         UpdateHeader();
+        sPage.reserve(pageHeader.length() + 1024);
         sPage += pageHeader;
 
 //g_Log.printf("Confirm delete %s\n", sFilename.c_str());
@@ -2352,10 +2547,27 @@ void HandleDownload()
 
     String sFilename = "/" + CfgServer.arg("file");
 
-    if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(100))) 
+    // Pause logging during downloads to avoid SD mutex contention and
+    // incomplete transfers (and to match the UI guidance on the index page).
+    struct PauseGuard
+        {
+        bool bPrevPause;
+        PauseGuard() : bPrevPause(g_bPause) { g_bPause = true; }
+        ~PauseGuard() { g_bPause = bPrevPause; }
+        } pauseGuard;
+
+    size_t fileSize = 0;
+    if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(2000))) 
         {
         file = g_SdFileSys.open(sFilename.c_str(), O_READ);
+        if (file)
+            fileSize = file.size();
         xSemaphoreGive(xWriteMutex);
+        }
+    else
+        {
+        CfgServer.send(503, "text/plain", "SD busy");
+        return;
         }
 
     if (!file) 
@@ -2365,29 +2577,67 @@ void HandleDownload()
         }
 
     // Send headers to trigger download
-    CfgServer.setContentLength(file.size());
+    CfgServer.setContentLength(fileSize);
     CfgServer.sendHeader("Content-Type", "application/octet-stream");
     CfgServer.sendHeader("Content-Disposition", "attachment; filename=" + CfgServer.arg("file"));
     CfgServer.sendHeader("Connection", "close");
     CfgServer.send(200);
 //      CfgServer.send(200, "application/octet-stream", "");
 
-    uint8_t achBuffer[512];
-    while (file.available()) 
+    WiFiClient client = CfgServer.client();
+    uint8_t achBuffer[1460];
+    while (true)
         {
-        size_t iLen;
+        size_t iLen = 0;
         // Getting and giving the semaphore is a bit slow
         // but wrapping this in one take / give doesn't speed
         // things that much and not having the sepaphore messes up logging.
-        if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(100))) 
+        if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(2000))) 
             {
             iLen = file.read(achBuffer, sizeof(achBuffer));
             xSemaphoreGive(xWriteMutex);
             }
-        CfgServer.client().write(achBuffer, iLen);
+        else
+            {
+            // SD is busy; wait and retry rather than aborting mid-transfer.
+            if (!client.connected())
+                break;
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+            }
+
+        if (iLen == 0)
+            break;
+
+        size_t iWritten = 0;
+        while (iWritten < iLen)
+            {
+            size_t iThisWrite = client.write(achBuffer + iWritten, iLen - iWritten);
+            if (iThisWrite == 0)
+                {
+                if (!client.connected())
+                    {
+                    iWritten = 0;
+                    break;
+                    }
+                // Yield and retry.
+                vTaskDelay(pdMS_TO_TICKS(1));
+                continue;
+                }
+            iWritten += iThisWrite;
+            // Yield periodically to keep WiFi/core-0 responsive during large transfers.
+            delay(0);
+            }
+
+        if (iWritten != iLen)
+            break;
         }
 
-    file.close();
+    if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(100))) 
+        {
+        file.close();
+        xSemaphoreGive(xWriteMutex);
+        }
 
     } // end HandleDownload()
 
@@ -2620,5 +2870,3 @@ String sFormatBytes(size_t bytes)
         return String(bytes / 1024.0 / 1024.0 / 1024.0) + " GB";
     }
 }
-
-

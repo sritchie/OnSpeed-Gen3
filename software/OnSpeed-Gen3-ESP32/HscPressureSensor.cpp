@@ -70,6 +70,20 @@ uint16_t  HscPressureSensor::ReadPressureCounts()
     UnHSC   uStatusCounts;
 
     uStatusCounts = ReadStatusCounts();
+
+    // Honeywell HSC sensors include a 2-bit status field. Only accept samples
+    // with normal status; otherwise, reuse the last good sample to avoid
+    // injecting spikes/glitches into downstream filters.
+    if (uStatusCounts.suHSC.uStatus == 0)
+        {
+        uLastGoodCounts    = uStatusCounts.suHSC.uCounts;
+        bHasLastGoodCounts = true;
+        return uStatusCounts.suHSC.uCounts;
+        }
+
+    if (bHasLastGoodCounts)
+        return uLastGoodCounts;
+
     return uStatusCounts.suHSC.uCounts;
 }
 
@@ -78,10 +92,28 @@ uint16_t  HscPressureSensor::ReadPressureCounts()
 float HscPressureSensor::ReadPressurePSI()
 {
     UnHSC   uStatusCounts;
+    uint16_t uCounts;
 
     uStatusCounts = ReadStatusCounts();
-    g_Log.printf(MsgLog::EnPressure, MsgLog::EnDebug, "Status 0x%2.2x  Counts %5d\n", uStatusCounts.suHSC.uStatus, uStatusCounts.suHSC.uCounts);
-    return ReadPressurePSI(uStatusCounts.suHSC.uCounts);
+
+    if (uStatusCounts.suHSC.uStatus == 0)
+        {
+        uCounts            = uStatusCounts.suHSC.uCounts;
+        uLastGoodCounts    = uCounts;
+        bHasLastGoodCounts = true;
+        }
+    else if (bHasLastGoodCounts)
+        {
+        uCounts = uLastGoodCounts;
+        }
+    else
+        {
+        uCounts = uStatusCounts.suHSC.uCounts;
+        }
+
+    g_Log.printf(MsgLog::EnPressure, MsgLog::EnDebug, "Status 0x%2.2x  Counts %5u\n",
+        uStatusCounts.suHSC.uStatus, (unsigned)uCounts);
+    return ReadPressurePSI(uCounts);
 }
 
 // ----------------------------------------------------------------------------

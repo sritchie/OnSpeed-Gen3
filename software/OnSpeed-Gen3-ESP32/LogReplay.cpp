@@ -81,8 +81,19 @@ void LogReplayTask(void *pvParams)
 
     g_AudioPlay.UpdateTones(); // to turn off tone at the end;
 
-    if (!hReplayFile.isOpen())
-        hReplayFile.close();
+    if (hReplayFile.isOpen())
+        {
+        if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(1000)))
+            {
+            hReplayFile.close();
+            xSemaphoreGive(xWriteMutex);
+            }
+        else
+            {
+            // Best effort close; SD may be busy.
+            hReplayFile.close();
+            }
+        }
 #endif
 
 } // end SensorReadTask
@@ -92,61 +103,81 @@ void LogReplayTask(void *pvParams)
 
 bool OpenReplayLog(String sLogFile)
     {
-    bool    bStatus;
-    int     iCharsRead;
+    bool    bStatus = false;
+    int     iCharsRead = 0;
+
+    if (!xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(1000)))
+        {
+        g_Log.printf(MsgLog::EnReplay, MsgLog::EnError, "OpenReplayLog: SD busy (xWriteMutex)\n");
+        return false;
+        }
 
     // Open the log CSV file
-    if (g_SdFileSys.exists(sLogFile.c_str()))
-        g_Log.printf("Replaying data from log file: %s\n", sLogFile.c_str());
-    else
+    if (!g_SdFileSys.exists(sLogFile.c_str()))
         {
+        xSemaphoreGive(xWriteMutex);
         g_Log.printf(MsgLog::EnReplay, MsgLog::EnError, "Could not find %s on the SD card\n", sLogFile.c_str());
         return false;
         }
 
-    if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(100))) 
+    hReplayFile = g_SdFileSys.open(sLogFile.c_str(), O_READ);
+    if (!hReplayFile.isOpen())
         {
-        hReplayFile = g_SdFileSys.open(sLogFile.c_str(), O_READ);
         xSemaphoreGive(xWriteMutex);
-        if (!hReplayFile.isOpen())
-            {
-            g_Log.printf(MsgLog::EnReplay, MsgLog::EnError, "Could not open %s on the SD card.\n", sLogFile.c_str());
-            return false;
-            }
+        g_Log.printf(MsgLog::EnReplay, MsgLog::EnError, "Could not open %s on the SD card.\n", sLogFile.c_str());
+        return false;
         }
 
 //        digitalWrite(PIN_LED1, HIGH);
 
     // Read the CSV header line
     iCharsRead = hReplayFile.fgets(szInLine, sizeof(szInLine));
+    xSemaphoreGive(xWriteMutex);
     if (iCharsRead <= 0)
-        return false;
+        goto fail;
 
     RemoveSpaces(szInLine);
 
     bStatus = CsvParser.parse_line(szInLine, CsvHeaders);
     if (bStatus == false)
-        return false;
+        goto fail;
 
     // Make sure required headers are present
-    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "PfwdSmoothed") == CsvHeaders.end()) return false;
-    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "P45Smoothed")  == CsvHeaders.end()) return false;
-    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "flapsPos")     == CsvHeaders.end()) return false;
-    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "Palt")         == CsvHeaders.end()) return false;
-    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "IAS")          == CsvHeaders.end()) return false;
-    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "DataMark")     == CsvHeaders.end()) return false;
-    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "VSI")          == CsvHeaders.end()) return false;
-    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "VerticalG")    == CsvHeaders.end()) return false;
-    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "LateralG")     == CsvHeaders.end()) return false;
-    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "ForwardG")     == CsvHeaders.end()) return false;
-    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "RollRate")     == CsvHeaders.end()) return false;
-    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "PitchRate")    == CsvHeaders.end()) return false;
-    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "YawRate")      == CsvHeaders.end()) return false;
-    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "Pitch")        == CsvHeaders.end()) return false;
-    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "Roll")         == CsvHeaders.end()) return false;
-    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "FlightPath")   == CsvHeaders.end()) return false;
+    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "PfwdSmoothed") == CsvHeaders.end()) goto fail;
+    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "P45Smoothed")  == CsvHeaders.end()) goto fail;
+    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "flapsPos")     == CsvHeaders.end()) goto fail;
+    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "Palt")         == CsvHeaders.end()) goto fail;
+    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "IAS")          == CsvHeaders.end()) goto fail;
+    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "DataMark")     == CsvHeaders.end()) goto fail;
+    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "VSI")          == CsvHeaders.end()) goto fail;
+    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "VerticalG")    == CsvHeaders.end()) goto fail;
+    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "LateralG")     == CsvHeaders.end()) goto fail;
+    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "ForwardG")     == CsvHeaders.end()) goto fail;
+    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "RollRate")     == CsvHeaders.end()) goto fail;
+    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "PitchRate")    == CsvHeaders.end()) goto fail;
+    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "YawRate")      == CsvHeaders.end()) goto fail;
+    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "Pitch")        == CsvHeaders.end()) goto fail;
+    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "Roll")         == CsvHeaders.end()) goto fail;
+    if (std::find(CsvHeaders.begin(), CsvHeaders.end(), "FlightPath")   == CsvHeaders.end()) goto fail;
 
+    g_Log.printf("Replaying data from log file: %s\n", sLogFile.c_str());
     return true;
+
+fail:
+    if (hReplayFile.isOpen())
+        {
+        if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(1000)))
+            {
+            hReplayFile.close();
+            xSemaphoreGive(xWriteMutex);
+            }
+        else
+            {
+            hReplayFile.close();
+            }
+        }
+
+    return false;
     }
 
 
@@ -164,7 +195,11 @@ bool ReadLogLine()
     iCharsRead = 0;
     while (true)
         {
+        if (!xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(1000)))
+            return false;
+
         iCharsRead = hReplayFile.fgets(szInLine, sizeof(szInLine));
+        xSemaphoreGive(xWriteMutex);
         if (iCharsRead <= 0)
             return false;
 
@@ -379,16 +414,17 @@ void ReadTestPot()
 // RANGESWEEP data source routines
 //-----------------------------------------------------------------------------
 
-#define RANGESWEEP_LOW_AOA     4.0
-#define RANGESWEEP_HIGH_AOA   15.0
+#define RANGESWEEP_LOW_AOA     0.0
+#define RANGESWEEP_HIGH_AOA   18.0
 #define RANGESWEEP_STEP        0.1                  // degrees AOA
+#define RANGESWEEP_INTERVAL_MS 100                  // ms to hold each AOA value
 
 // FreeRTOS task for reading test pot
 
 void RangeSweepTask(void *pvParams)
 {
-    static float    fRangeSweepUp = true;
-    static float    fCurrentRangeSweepValue;
+    bool            fRangeSweepUp = true;
+    float           fCurrentRangeSweepValue = RANGESWEEP_LOW_AOA;
 
     BaseType_t      xWasDelayed;
     TickType_t      xLastWakeTime;
@@ -396,17 +432,17 @@ void RangeSweepTask(void *pvParams)
     // Get the passed parameters
 //    SuParamsReplay    * psuParamsReplay = (SuParamsReplay *)pvParams;
 
-    xLastWakeTime = xLAST_TICK_TIME(20);
+    xLastWakeTime = xLAST_TICK_TIME(RANGESWEEP_INTERVAL_MS);
 
     while (true)
     {
         // No delay happening is a design flaw so flag it if it happens, or
         // rather doesn't happen.
-        xWasDelayed = xTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(20));
+        xWasDelayed = xTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(RANGESWEEP_INTERVAL_MS));
 
         if (xWasDelayed == pdFALSE)
         {
-            xLastWakeTime = xLAST_TICK_TIME(20);
+            xLastWakeTime = xLAST_TICK_TIME(RANGESWEEP_INTERVAL_MS);
             g_Log.println(MsgLog::EnReplay, MsgLog::EnWarning, "RangeSweepTask Late");
         }
 
@@ -430,6 +466,4 @@ void RangeSweepTask(void *pvParams)
 
     } // end while true is true
 
-} // end TestPotTask
-
-
+} // end RangeSweepTask

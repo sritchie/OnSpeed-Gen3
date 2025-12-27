@@ -10,7 +10,7 @@ const char szHtmlHeader[] PROGMEM = R"=====(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta charset="utf-8"/>
 <meta http-equiv="Cache-Control" content="no-cache">
-<title>OnSpeed Gen2 Configuration</title>
+<title>OnSpeed Gen3 Configuration</title>
 
 <style>
 body {
@@ -593,7 +593,7 @@ section h2 {
         <div class="dropdown-content">
             <a href="logs">Log Files</a>
             <a href="format">Format SD Card</a>
-            <a href="upgrade">Upgrade Wifi module</a>
+            <a href="upgrade">Firmware Upgrade</a>
             <a href="reboot">Reboot System</a>
         </div>    
         </li>

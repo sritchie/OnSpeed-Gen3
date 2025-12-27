@@ -74,29 +74,28 @@ bool FOSConfig::LoadConfigurationFile(char* szFilename)
     // If config file exists on SD card load it
     FsFile  hConfigFile;
 
-    if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(100))) 
+    if (!xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(100)))
+        return false;
+
+    hConfigFile = g_SdFileSys.open(szFilename, O_READ);
+    if (!hConfigFile)
         {
-        hConfigFile = g_SdFileSys.open(szFilename, O_READ);
-        if (hConfigFile) 
-            {
-            while (hConfigFile.available())
-                sConfig += char(hConfigFile.read());                                                                                      
-
-            // Close the file:
-            hConfigFile.close();
-
-            xSemaphoreGive(xWriteMutex);
-
-            g_Log.printf(MsgLog::EnConfig, MsgLog::EnDebug, "Read file '%s' from SD card\n", szFilename);
-
-            bStatus = LoadConfigFromString(sConfig);                
-            } // end if config file open OK
-
-        else 
-            g_Log.printf(MsgLog::EnConfig, MsgLog::EnDebug, "Error reading %s from SD card", szFilename);
-
+        g_Log.printf(MsgLog::EnConfig, MsgLog::EnDebug, "Error reading %s from SD card", szFilename);
         xSemaphoreGive(xWriteMutex);
-        } // end if semaphore OK
+        return false;
+        }
+
+    while (hConfigFile.available())
+        sConfig += char(hConfigFile.read());
+
+    // Close the file:
+    hConfigFile.close();
+
+    xSemaphoreGive(xWriteMutex);
+
+    g_Log.printf(MsgLog::EnConfig, MsgLog::EnDebug, "Read file '%s' from SD card\n", szFilename);
+
+    bStatus = LoadConfigFromString(sConfig);
 
     return bStatus;
     }
@@ -749,7 +748,7 @@ bool FOSConfig::LoadConfigFromString(String sConfig)
         if (pXmlBias != NULL)
             {
             XML_GET_INT  (pXmlBias, "PFWD",     iPFwdBias)
-            XML_GET_INT  (pXmlBias, "PFWD",     iP45Bias)
+            XML_GET_INT  (pXmlBias, "P45",      iP45Bias)
             XML_GET_FLOAT(pXmlBias, "PSTATIC",  fPStaticBias)
             XML_GET_FLOAT(pXmlBias, "GX",       fGxBias)
             XML_GET_FLOAT(pXmlBias, "GY",       fGyBias)
@@ -824,7 +823,7 @@ String FOSConfig::ToString(float fFloat)
     char szFloatBuffer[20];
 
     // Save config float values with 4 digit precision
-    sprintf(szFloatBuffer,"%.4f",fFloat);
+    snprintf(szFloatBuffer, sizeof(szFloatBuffer), "%.4f", fFloat);
     return String (szFloatBuffer);
 }
 

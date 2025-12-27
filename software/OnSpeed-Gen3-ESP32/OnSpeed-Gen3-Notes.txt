@@ -1,0 +1,48 @@
+OnSpeed Gen3 Software Notes
+===========================
+
+Required Libraries
+------------------
+
+..\libraries\EspSoftwareSerial
+..\libraries\SdFat
+..\libraries\OneButton
+..\libraries\RunningAverage
+..\libraries\OneWire
+..\libraries\DallasTemperature
+..\libraries\RunningMedian
+..\libraries\SavitzkyGolayFilter
+..\libraries\RunningAverage
+..\libraries\OneWire
+..\libraries\DallasTemperature
+..\libraries\RunningMedian
+..\libraries\tinyxml2
+..\libraries\tinyxml2
+..\libraries\csv-parser
+
+ArduinoJson
+csv-parser
+OneButton
+OneWire
+RunningAverage
+RunningMedian
+SavitzkyGolayFilter
+tinyxml2
+WebSockets
+
+???
+SdFat
+GuageWidgets
+EspSoftwareSerial
+DallasTemperataure
+BasicLinearAlgebra
+Adafruit_NeoPixel
+
+
+Build Settings
+--------------
+"ESP32S3 Dev Module Octal (WROOM2)" 
+board="ESP32S3_DEV"
+flash_size="32MB"
+PartitionScheme.app5M_little24M_32MB="32M Flash (4.8MB APP/22MB LittleFS)"
+

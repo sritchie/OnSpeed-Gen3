@@ -273,14 +273,21 @@ void ConsoleSerialIO::Read()
                     {
                     if (g_Config.bSdLogging == false)
                         {
-                        g_Config.bSdLogging = true;
-                        g_Config.SaveConfigurationToFile();
-                        if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(100))) 
+                        if (xLoggingRingBuffer == NULL)
                             {
-                            g_LogSensor.Open();
-                            xSemaphoreGive(xWriteMutex);
+                            g_Log.println(MsgLog::EnDisk, MsgLog::EnError, "Logging ring buffer not allocated; cannot enable logging");
                             }
-                        g_Log.println("Logging ENABLED");
+                        else
+                            {
+                            g_Config.bSdLogging = true;
+                            g_Config.SaveConfigurationToFile();
+                            if (xSemaphoreTake(xWriteMutex, pdMS_TO_TICKS(100))) 
+                                {
+                                g_LogSensor.Open();
+                                xSemaphoreGive(xWriteMutex);
+                                }
+                            g_Log.println("Logging ENABLED");
+                            }
                         }
                     } // end ENABLE
 
@@ -497,8 +504,8 @@ void ConsoleSerialIO::Read()
             // ---------
             else if (strncasecmp(szCmdToken, "AUDIOTEST", 9) == 0)
                 {
-                g_AudioPlay.AudioTest();
-                g_Log.printf("AUDIOTEST Complete\n");
+                bool bStarted = g_AudioPlay.StartAudioTest();
+                g_Log.printf("AUDIOTEST %s\n", bStarted ? "Started" : "Busy");
                 }
 
             // TASKS
