@@ -92,7 +92,9 @@
 
 // Includes
 // ========
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <stdint.h>
 
@@ -105,7 +107,8 @@
 #include "freertos/ringbuf.h"
 
 // Arduino libraries
-#include "SdFat.h" // https://github.com/greiman/SdFat
+#define DISABLE_FS_H_WARNING  // Suppress SdFat warning about FS.h - we use SdFat's File types
+#include "SdFat.h"            // https://github.com/greiman/SdFat
 #include <OneButton.h>            // button click/double click detection https://github.com/mathertel/OneButton
 #include "SPI.h"
 

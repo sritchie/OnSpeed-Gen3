@@ -7,6 +7,9 @@
 #include "Globals.h"
 
 #ifdef SUPPORT_LITTLEFS
+// Undefine SdFat's FILE_READ/FILE_WRITE before including LittleFS which redefines them
+#undef FILE_READ
+#undef FILE_WRITE
 #include <LittleFS.h>
 #endif
 
@@ -99,8 +102,8 @@ MSG module debug|warning|error  - Set message log level
 
 void ConsoleSerialIO::Read()
     {
-    char    cSerialCmdChar;         // usb serial command character
-    char    szListfileFileName[25]; // file name for sd card file listing operations
+    char    cSerialCmdChar = '\0';  // usb serial command character
+    (void)cSerialCmdChar;           // suppress unused warning when semaphore fails
 
     // Look for serial command
     if (pSerial->available() > 0)
@@ -334,7 +337,7 @@ void ConsoleSerialIO::Read()
                     char * szLevel = strtok(NULL, " ");
                     if (szLevel != NULL)
                         {
-                        bool    bStatus;
+                        bool    bStatus = false;
 
                         if      (strcasecmp(szLevel, "DEBUG")   == 0) bStatus = g_Log.Set(szModName, MsgLog::EnDebug);
                         else if (strcasecmp(szLevel, "WARNING") == 0) bStatus = g_Log.Set(szModName, MsgLog::EnWarning);
@@ -471,7 +474,7 @@ void ConsoleSerialIO::Read()
             // ------
             else if (strncasecmp(szCmdToken, "VOLUME", 6) == 0)
                 {
-                int     iVolPos;
+                int     iVolPos = 0;
                 int     iVolumePercent;
 
                 if (xSemaphoreTake(xSensorMutex, pdMS_TO_TICKS(100)))
@@ -600,10 +603,10 @@ std::string Base64_Decode(std::string sEncodedString)
     {
         // Get values for each group of four base 64 characters
         char    b4[4];
-        b4[0] = (sEncodedString[i+0] <= 'z') ? from_base64[sEncodedString[i+0]] : 0xff;
-        b4[1] = (sEncodedString[i+1] <= 'z') ? from_base64[sEncodedString[i+1]] : 0xff;
-        b4[2] = (sEncodedString[i+2] <= 'z') ? from_base64[sEncodedString[i+2]] : 0xff;
-        b4[3] = (sEncodedString[i+3] <= 'z') ? from_base64[sEncodedString[i+3]] : 0xff;
+        b4[0] = (sEncodedString[i+0] <= 'z') ? from_base64[static_cast<unsigned char>(sEncodedString[i+0])] : 0xff;
+        b4[1] = (sEncodedString[i+1] <= 'z') ? from_base64[static_cast<unsigned char>(sEncodedString[i+1])] : 0xff;
+        b4[2] = (sEncodedString[i+2] <= 'z') ? from_base64[static_cast<unsigned char>(sEncodedString[i+2])] : 0xff;
+        b4[3] = (sEncodedString[i+3] <= 'z') ? from_base64[static_cast<unsigned char>(sEncodedString[i+3])] : 0xff;
 
         // Transform into a group of three bytes
         char    b3[3];

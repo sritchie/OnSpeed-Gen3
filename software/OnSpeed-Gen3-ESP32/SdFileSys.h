@@ -3,7 +3,9 @@
 #ifndef FILESYS_H
 #define FILESYS_H
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <stdint.h>
 
@@ -16,6 +18,9 @@
 #endif
 
 #include <SPI.h>
+#ifndef DISABLE_FS_H_WARNING
+#define DISABLE_FS_H_WARNING
+#endif
 #include <SdFat.h>
 
 class SdFileSys

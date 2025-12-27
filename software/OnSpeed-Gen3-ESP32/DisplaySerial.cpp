@@ -122,7 +122,7 @@ void DisplaySerial::Init(Stream * pDispSerial)
 
 void DisplaySerial::Write()
     {
-    byte            SerialCRC;
+    byte            SerialCRC = 0;
 
 //    if (serialOutPort!="NONE" && millis()-serialoutLastUpdate>100) // update every 100ms, 10Hz
 

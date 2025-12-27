@@ -2204,9 +2204,9 @@ Enter the following aircraft parameters:<br><br>
         String SjsCalibration   = String(jsCalibration);
         String ShtmlCalibration = String(htmlCalibration);
 
-        int contentLength = sPage.length()          +  SjsSGfilter.length()     + SjsRegression.length() +
-                            ScssChartist.length()   + SjsChartist1.length()     + SjsChartist2.length() +
-                            SjsCalibration.length() + ShtmlCalibration.length() + pageFooter.length();
+        //int contentLength = sPage.length()          +  SjsSGfilter.length()     + SjsRegression.length() +
+        //                    ScssChartist.length()   + SjsChartist1.length()     + SjsChartist2.length() +
+        //                    SjsCalibration.length() + ShtmlCalibration.length() + pageFooter.length();
         //CfgServer.sendHeader("Content-Length", (String)contentLength);
         CfgServer.setContentLength(CONTENT_LENGTH_UNKNOWN); // send content in chuncks, too large for String
         CfgServer.send(200, "text/html", "");
@@ -2511,7 +2511,7 @@ void HandleDelete()
         // Display confirmation page
         sPage += "<br><br><p style=\"color:red\">Confirm that you want to delete <b>" + sFilename + "</b></p>\
         <br><br><br>\
-        <a href=\"/delete?confirm=yes\&file=" + sFilename + "\" class=\"button\">Delete</a>\
+        <a href=\"/delete?confirm=yes&file=" + sFilename + "\" class=\"button\">Delete</a>\
         <a href=\"/logs\">Cancel</a>";
         sPage += pageFooter;
         CfgServer.send(200, "text/html", sPage);

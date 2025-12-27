@@ -72,3 +72,32 @@ jobs:
           name: firmware
           path: .pio/build/esp32s3/*.bin
           retention-days: 30
+
+  static-analysis:
+    name: Static Analysis (cppcheck)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install cppcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck
+
+      - name: Run cppcheck
+        run: |
+          echo "## Static Analysis Results" >> $GITHUB_STEP_SUMMARY
+          ./scripts/cppcheck.sh --strict 2>&1 | tee cppcheck-output.txt
+
+          # Add results to summary
+          if [ -s cppcheck-output.txt ]; then
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat cppcheck-output.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No issues found." >> $GITHUB_STEP_SUMMARY
+          fi
