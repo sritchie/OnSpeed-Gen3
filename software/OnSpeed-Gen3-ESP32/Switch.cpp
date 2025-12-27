@@ -32,9 +32,6 @@ void RebootFromSwitch()
 
 void SwitchCheckTask(void * pvParams)
     {
-    BaseType_t      xWasDelayed;
-    TickType_t      xLastWakeTime = xTaskGetTickCount();
-
     // Setup OneButton switch
     pinMode(SWITCH_PIN,   INPUT_PULLUP);
     // OneButton press timing values are in milliseconds (not "tick()" calls).
@@ -61,7 +58,7 @@ void SwitchCheckTask(void * pvParams)
         // Check for a long press event (1 second)
         if (bSwitchDoLongPress)
             {
-            g_iDataMark++;
+            g_iDataMark = g_iDataMark + 1;
             g_Log.println(MsgLog::EnSwitch, MsgLog::EnDebug, "Data Mark");
             g_AudioPlay.SetVoice(enVoiceDatamark);
             bSwitchDoLongPress = false;

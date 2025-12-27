@@ -1,4 +1,7 @@
 
+#ifndef DISABLE_FS_H_WARNING
+#define DISABLE_FS_H_WARNING
+#endif
 #include "SdFat.h"
 
 #include <cstdarg>

@@ -61,30 +61,30 @@ void IMU330::Init()
 
   // SPI interface: I2C_disable = 1 in CTRL4_C (13h) and DEVICE_CONF = 1 in CTRL9_XL (18h).
 
-  SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(CTRL9_XL), B11100010);
+  SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(CTRL9_XL), 0b11100010);
   delay(50);
 
   // enable accelerometer
-  SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(CTRL1_XL), B01011100); // 208hz ODR, +/-8G, LPF2 disabled
+  SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(CTRL1_XL), 0b01011100); // 208hz ODR, +/-8G, LPF2 disabled
   delay(50);
 
   // enable gyroscope
-  SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(CTRL2_G), B01010000); // 208 hz, 250dps
+  SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(CTRL2_G), 0b01010000); // 208 hz, 250dps
   delay(50);
 
   // disable gyroscope hi-pass filter
-  SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(CTRL7_G), B00000000); // high performance mode, disable high pass filter
+  SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(CTRL7_G), 0b00000000); // high performance mode, disable high pass filter
   delay(50);
 
   // disable LPF1, disable I2C
-  SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(CTRL4_C), B00000100); // disable low pass filter 1, LPF2 is still on at 67hz bandwidth
+  SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(CTRL4_C), 0b00000100); // disable low pass filter 1, LPF2 is still on at 67hz bandwidth
   delay(50);
 
   // set fifo
-  SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(FIFO_CTRL4), B00010000); // bypass mode, fifo disabled
+  SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(FIFO_CTRL4), 0b00010000); // bypass mode, fifo disabled
   delay(50);
 
-  SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(CTRL9_XL), B11100000);
+  SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(CTRL9_XL), 0b11100000);
   delay(50);
 
   g_Log.printf(MsgLog::EnIMU, MsgLog::EnDebug, "IMU Who Am I : 0x%2.2X\n", g_pIMU->WhoAmI());
@@ -96,9 +96,9 @@ void IMU330::Init()
 void IMU330::Reset()
 {
     // soft reset accelerometer/gyro
-    SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(CTRL3_C),  B00000101);
+    SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(CTRL3_C),  0b00000101);
     delay(100);
-    SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(CTRL3_C),  B00000100);
+    SensorSPI->WriteRegByte(uChipSel, IMU_WRITE_ADDR(CTRL3_C),  0b00000100);
     delay(100);
 }
 
@@ -394,7 +394,6 @@ float IMU330::GetGyroForAxis(String gyroAxis)
 
 void IMU330::GetGyroForAxis(String gyroAxis, float * pfGyroSign, float ** ppfGryo)
     {
-    float result=0.0;
     if      (gyroAxis[gyroAxis.length()-1] == 'X') *ppfGryo = &fGyroXwBias;
     else if (gyroAxis[gyroAxis.length()-1] == 'Y') *ppfGryo = &fGyroYwBias;
     else                                           *ppfGryo = &fGyroZwBias;

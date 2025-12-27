@@ -185,7 +185,6 @@ fail:
 
 bool ReadLogLine()
     {
-
     bool    bStatus;
     int     iCharsRead;
     long    lTimestamp;
@@ -214,10 +213,10 @@ bool ReadLogLine()
         } // end reading lines looking for a good one
 
     // We got a good line so convert some values
-    try { lTimestamp             =  std::stol(CsvData["timeStamp"].c_str());    } catch (const std::invalid_argument) { lTimestamp              = 0; }
-    try { g_Sensors.PfwdSmoothed =  std::stof(CsvData["PfwdSmoothed"].c_str()); } catch (const std::invalid_argument) { g_Sensors.PfwdSmoothed  = 0; }
-    try { g_Sensors.P45Smoothed  =  std::stof(CsvData["P45Smoothed"].c_str());  } catch (const std::invalid_argument) { g_Sensors.P45Smoothed   = 0; }
-    try { g_Flaps.iPosition      =  std::stoi(CsvData["flapsPos"].c_str());     } catch (const std::invalid_argument) { g_Flaps.iPosition       = 0; }
+    try { lTimestamp             =  std::stol(CsvData["timeStamp"].c_str());    } catch (const std::invalid_argument&) { lTimestamp              = 0; }
+    try { g_Sensors.PfwdSmoothed =  std::stof(CsvData["PfwdSmoothed"].c_str()); } catch (const std::invalid_argument&) { g_Sensors.PfwdSmoothed  = 0; }
+    try { g_Sensors.P45Smoothed  =  std::stof(CsvData["P45Smoothed"].c_str());  } catch (const std::invalid_argument&) { g_Sensors.P45Smoothed   = 0; }
+    try { g_Flaps.iPosition      =  std::stoi(CsvData["flapsPos"].c_str());     } catch (const std::invalid_argument&) { g_Flaps.iPosition       = 0; }
 
     g_fCoeffP = PCOEFF(g_Sensors.PfwdSmoothed, g_Sensors.P45Smoothed);
 
@@ -231,19 +230,19 @@ bool ReadLogLine()
             }
         }
 
-    try { g_Sensors.Palt         =  std::stof(CsvData["Palt"]);                 } catch (const std::invalid_argument) { g_Sensors.Palt       = 0; }
-    try { g_Sensors.IAS          =  std::stof(CsvData["IAS"]);                  } catch (const std::invalid_argument) { g_Sensors.IAS        = 0; }
-    try { g_iDataMark            =  std::stoi(CsvData["DataMark"]);             } catch (const std::invalid_argument) { g_iDataMark          = 0; }
-    try { g_AHRS.KalmanVSI       =  std::stof(CsvData["VSI"]) / 196.85;         } catch (const std::invalid_argument) { g_AHRS.KalmanVSI     = 0; }
-    try { g_pIMU->Ax             =  std::stof(CsvData["ForwardG"]);             } catch (const std::invalid_argument) { g_pIMU->Ax = 0; }   // forward G
-    try { g_pIMU->Ay             =  std::stof(CsvData["LateralG"]);             } catch (const std::invalid_argument) { g_pIMU->Ay = 0; }   // lateralG
-    try { g_pIMU->Az             =  std::stof(CsvData["VerticalG"]);            } catch (const std::invalid_argument) { g_pIMU->Az = 0; }   // vertical G
-    try { g_pIMU->Gx             =  std::stof(CsvData["RollRate"]);             } catch (const std::invalid_argument) { g_pIMU->Gx = 0; }   // roll
-    try { g_pIMU->Gy             = -std::stof(CsvData["PitchRate"]);            } catch (const std::invalid_argument) { g_pIMU->Gy = 0; }   // pitch (reversed in log file)
-    try { g_pIMU->Gz             =  std::stof(CsvData["YawRate"]);              } catch (const std::invalid_argument) { g_pIMU->Gz = 0; }   // yaw
-    try { g_AHRS.SmoothedPitch   =  std::stof(CsvData["Pitch"]);                } catch (const std::invalid_argument) { g_AHRS.SmoothedPitch = 0; }
-    try { g_AHRS.SmoothedRoll    =  std::stof(CsvData["Roll"]);                 } catch (const std::invalid_argument) { g_AHRS.SmoothedRoll  = 0; }
-    try { g_AHRS.FlightPath      =  std::stof(CsvData["FlightPath"]);           } catch (const std::invalid_argument) { g_AHRS.FlightPath    = 0; }
+    try { g_Sensors.Palt         =  std::stof(CsvData["Palt"]);                 } catch (const std::invalid_argument&) { g_Sensors.Palt       = 0; }
+    try { g_Sensors.IAS          =  std::stof(CsvData["IAS"]);                  } catch (const std::invalid_argument&) { g_Sensors.IAS        = 0; }
+    try { g_iDataMark            =  std::stoi(CsvData["DataMark"]);             } catch (const std::invalid_argument&) { g_iDataMark          = 0; }
+    try { g_AHRS.KalmanVSI       =  std::stof(CsvData["VSI"]) / 196.85;         } catch (const std::invalid_argument&) { g_AHRS.KalmanVSI     = 0; }
+    try { g_pIMU->Ax             =  std::stof(CsvData["ForwardG"]);             } catch (const std::invalid_argument&) { g_pIMU->Ax = 0; }   // forward G
+    try { g_pIMU->Ay             =  std::stof(CsvData["LateralG"]);             } catch (const std::invalid_argument&) { g_pIMU->Ay = 0; }   // lateralG
+    try { g_pIMU->Az             =  std::stof(CsvData["VerticalG"]);            } catch (const std::invalid_argument&) { g_pIMU->Az = 0; }   // vertical G
+    try { g_pIMU->Gx             =  std::stof(CsvData["RollRate"]);             } catch (const std::invalid_argument&) { g_pIMU->Gx = 0; }   // roll
+    try { g_pIMU->Gy             = -std::stof(CsvData["PitchRate"]);            } catch (const std::invalid_argument&) { g_pIMU->Gy = 0; }   // pitch (reversed in log file)
+    try { g_pIMU->Gz             =  std::stof(CsvData["YawRate"]);              } catch (const std::invalid_argument&) { g_pIMU->Gz = 0; }   // yaw
+    try { g_AHRS.SmoothedPitch   =  std::stof(CsvData["Pitch"]);                } catch (const std::invalid_argument&) { g_AHRS.SmoothedPitch = 0; }
+    try { g_AHRS.SmoothedRoll    =  std::stof(CsvData["Roll"]);                 } catch (const std::invalid_argument&) { g_AHRS.SmoothedRoll  = 0; }
+    try { g_AHRS.FlightPath      =  std::stof(CsvData["FlightPath"]);           } catch (const std::invalid_argument&) { g_AHRS.FlightPath    = 0; }
 
     // AOA is recalculated, which I think is kind of stinky. I'd rather display the AOA
     // that was calculated during the recording.
@@ -353,7 +352,6 @@ void TestPotTask(void *pvParams)
 void ReadTestPot()
     {
     float   fFlapRawValue = 0;
-    float   fFlapRawValueLow, fFlapRawValueHigh;
     float   smoothingAlpha  = 0.04;
     float   fReadAOA;
 

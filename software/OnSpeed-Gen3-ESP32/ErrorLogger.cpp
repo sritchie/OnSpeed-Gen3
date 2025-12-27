@@ -64,7 +64,7 @@ bool MsgLog::Test(EnModule enModule, EnLevel enLevel)
 
 // ----------------------------------------------------------------------------
 
-char * MsgLog::szLevelName(EnLevel enLevel)
+const char * MsgLog::szLevelName(EnLevel enLevel)
     {
     if      (enLevel == EnDebug)    return "DEBUG";
     else if (enLevel == EnWarning)  return "WARNING";
@@ -145,7 +145,7 @@ void MsgLog::printf(EnModule enModule, EnLevel enLevel, const char * szFmt, ...)
 
 size_t  MsgLog::print(const char * szLogMsg)
     {
-    size_t  iChars;
+    size_t  iChars = 0;
 
     if (xSemaphoreTake(xSerialLogMutex, pdMS_TO_TICKS(100)))
         {
@@ -159,7 +159,7 @@ size_t  MsgLog::print(const char * szLogMsg)
 
 size_t  MsgLog::println(const char * szLogMsg)
     {
-    size_t  iChars;
+    size_t  iChars = 0;
 
     if (xSemaphoreTake(xSerialLogMutex, pdMS_TO_TICKS(100)))
         {
@@ -173,7 +173,7 @@ size_t  MsgLog::println(const char * szLogMsg)
 
 size_t  MsgLog::printf(const char * szFmt, ...)
     {
-    size_t  iChars;
+    size_t  iChars = 0;
 
     if (xSemaphoreTake(xSerialLogMutex, pdMS_TO_TICKS(100)))
         {

@@ -46,8 +46,8 @@ public:
         };
 
     struct SuLogInfo {
-        EnLevel     enLevel;
-        char      * szDescription;
+        EnLevel         enLevel;
+        const char    * szDescription;
         } asuModule[ModuleCount];
 
     // Methods
@@ -55,7 +55,7 @@ public:
     void Set(EnModule enModule, EnLevel enLevel);
     bool Set(const char * szModule, EnLevel enLevel);
     bool Test(EnModule enModule, EnLevel enLevel);
-    char * szLevelName(EnLevel enLevel);
+    const char * szLevelName(EnLevel enLevel);
 
     void print(EnModule enModule, EnLevel enLevel, const char * szLogMsg);
     void println(EnModule enModule, EnLevel enLevel, const char * szLogMsg);

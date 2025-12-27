@@ -19,7 +19,9 @@
 
 // Timers to reduce read frequency for less critical sensors
 static uint32_t uLastFlapsReadMs = 0;
+#ifdef OAT_AVAILABLE
 static uint32_t uLastOatReadMs = 0;
+#endif
 
 
 // ----------------------------------------------------------------------------
@@ -84,13 +86,13 @@ void SensorReadTask(void *pvParams)
 // ============================================================================
 
 SensorIO::SensorIO()
-    : P45Median(g_Config.iPressureSmoothing),
-      PfwdMedian(g_Config.iPressureSmoothing),
+    : PfwdMedian(g_Config.iPressureSmoothing),
       PfwdAvg(10),
+      P45Median(g_Config.iPressureSmoothing),
       P45Avg(10),
+      IasDerivative(&fIasDerInput, 1, 15),
       OneWireBus(OAT_PIN),
-      OatSensor(&OneWireBus),
-      IasDerivative(&fIasDerInput, 1, 15)
+      OatSensor(&OneWireBus)
 {
     Palt       = 0.00;
     fDecelRate = 0.0;
@@ -117,8 +119,6 @@ void SensorIO::Init()
 
 void SensorIO::Read()
 {
-
-    int             iFlapsIndex;
     float           PfwdPascal;
 
     // Read pressure sensors

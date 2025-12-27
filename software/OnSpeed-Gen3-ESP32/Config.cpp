@@ -6,6 +6,9 @@
 #include "Globals.h"
 
 #ifdef SUPPORT_LITTLEFS
+// Undefine SdFat's FILE_READ/FILE_WRITE before including LittleFS which redefines them
+#undef FILE_READ
+#undef FILE_WRITE
 #include <LittleFS.h>
 #endif
 

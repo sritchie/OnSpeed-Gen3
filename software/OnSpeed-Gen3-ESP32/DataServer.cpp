@@ -106,6 +106,8 @@ void DataServerEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t lengt
 	    case WStype_FRAGMENT_BIN_START:
 	    case WStype_FRAGMENT:
 	    case WStype_FRAGMENT_FIN:
+	    case WStype_PING:
+	    case WStype_PONG:
 	        break;
         }
 

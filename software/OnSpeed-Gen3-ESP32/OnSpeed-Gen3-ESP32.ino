@@ -21,6 +21,9 @@ Do a text search for comments starting with "////"
 #include "Globals.h"
 
 #ifdef SUPPORT_LITTLEFS
+// Undefine SdFat's FILE_READ/FILE_WRITE before including LittleFS which redefines them
+#undef FILE_READ
+#undef FILE_WRITE
 #include <LittleFS.h>
 #endif
 
@@ -339,8 +342,6 @@ void setup()
 
 void loop()
     {
-    bool                bLoopStats;
-
 //    uLoopStartTime = uMilliSeconds;
 
     // FreeRTOS doesn't really have very good support for serial port I/O. The
