@@ -4,13 +4,13 @@
 #define _CONFIG_H_
 
 #include <vector>
+#include <OnSpeedTypes.h>  // For SuCalibrationCurve, MAX_CURVE_COEFF
 
 // #include "Globals.h"
 
 #define SUPPORT_CONFIG_V1
 
 #define MAX_AOA_CURVES    5 // maximum number of AOA curves (flap/gear positions)
-#define MAX_CURVE_COEFF   4 // 4 coefficients=3rd degree polynomial function for calibration curves
 
     // Data Structures
     // ---------------
@@ -30,10 +30,7 @@
     } SuFloatArray;
 #endif
 
-    typedef struct  {
-      float     afCoeff[MAX_CURVE_COEFF]; // 3rd degree polynomial
-      uint8_t   iCurveType; // 1 - polynomial, 2 - logarithmic (linear is 1 degree polynomial), 3 - exponential
-    } SuCalibrationCurve;
+    // SuCalibrationCurve is now defined in OnSpeedTypes.h
 
 
 // ============================================================================
