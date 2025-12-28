@@ -207,37 +207,9 @@
 #define LOGDATA_PRESSURE_RATE   // Log at pressure read rate (50 Hz)
 //#define LOGDATA_IMU_RATE      // Log at the IMU read rate
 
-// Coefficient of pressure formula
 #ifdef SPHERICAL_PROBE
-//  #define PCOEFF(p_fwd,p_45)    atan2(p_45,p_fwd); //spherical CP3
-//  #define IASCURVE(x)           -3.206e-05*x*x*x+0.008454*x*x+0.3492*x+27.73; // Zlin IAS curve
-  #define PCOEFF(p_fwd,p_45)    p_45/p_fwd; //spherical CP3
   #define IASCURVE(x)           x // Zlin IAS curve
-#else
-  #define PCOEFF(p_fwd,p_45)  p_45/p_fwd; // CP3 // ratiometric CP. CP1 & CP2 are not ratiometric. Can't divide with P45, it goes through zero on Dynon probe.
 #endif
-
-#define DEG2RAD(deg)    ((deg)    * 0.0174533)    // degrees to radians
-#define RAD2DEG(rad)    ((rad)    * 57.2958)      // radians to degrees
-#define G2MPS(gs)       ((gs)     * 9.80665)      // g to m/sec^2
-#define MPS2G(mps)      ((mps)    * 0.101971621)  // m/sec^2 to g
-#define FT2M(ft)        ((ft)     * 0.3048)       // feet to meters
-#define M2FT(meters)    ((meters) * 3.28084)      // meters to feet
-#define MPS2FPM(mps)    ((mps)    * 196.85)       // m/sec to fpm
-#define MPS2KTS(mps)    ((mps)    * 1.94384)      // m/sec to kts
-#define KTS2MPS(kts)    ((kts)    * 0.514444)     // kts to m/sec
-#define INHG2MB(inhg)   ((inhg)   * 33.8639)      // pressure inhg to millibars
-#define PSI2MB(psi)     ((psi)    * 68.94757)     // pressure PSI to millibars
-#define MB2PSI(mb)      ((mb)     * 0.0145038)    // pressure millibars to PSI
-
-#define PITCH(Ax, Ay, Az)   (RAD2DEG( atan2((Ax), sqrt((Ay)*(Ay) + (Az)*(Az)))))  // Pitch from accelerations in degrees
-#define ROLL(Ax, Ay, Az)    (RAD2DEG(-atan2((Ay), sqrt((Ax)*(Ax) + (Az)*(Az)))))  // Roll from accelerations in degrees
-
-// Max possible AOA value
-#define AOA_MAX_VALUE         40  // was 20 before, but in a sudden stall when the nose quickly goes up, AOA gets larger very quickly and then onspeed goes silent right as the aircraft stalls
-
- // Min possible AOA value
-#define AOA_MIN_VALUE         -20
 
 // Serial baud rates
 #define BAUDRATE_CONSOLE       921600
