@@ -1,7 +1,7 @@
 
 #include "Globals.h"
 #include "Config.h"
-#include "CurveCalc.h"
+#include <CurveCalc.h>
 
 // ----------------------------------------------------------------------------
 

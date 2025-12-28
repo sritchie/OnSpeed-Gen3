@@ -10,7 +10,7 @@
 #include "Config.h"
 #include "Flaps.h"
 #include "AOAcalc.h"
-#include "CurveCalc.h"
+#include <CurveCalc.h>
 #include "SensorIO.h"
 
 // These from config

@@ -5,8 +5,8 @@
 
 #include "Globals.h"
 
-#include "MadgwickFusion.h"
-#include "KalmanFilter.h"
+#include <MadgwickFusion.h>
+#include <KalmanFilter.h>
 
 class AHRS
 {
