@@ -7,8 +7,6 @@
 
 #include <WebSocketsServer.h>   // https://github.com/Links2004/arduinoWebSockets version 2.1.3
 
-#include <ArduinoJson.h>
-
 #include "Globals.h"
 #include "DataServer.h"
 
