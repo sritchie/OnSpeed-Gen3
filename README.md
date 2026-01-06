@@ -84,3 +84,73 @@ Or build, upload, and monitor in one command:
 ```bash
 pio run -t upload && pio device monitor
 ```
+
+### Building with Arduino IDE
+
+1. Install [Arduino IDE 2.x](https://www.arduino.cc/en/software)
+
+2. Add ESP32 board support:
+   - Go to **Preferences** and add this URL to "Additional Board Manager URLs":
+     ```
+     https://espressif.github.io/arduino-esp32/package_esp32_index.json
+     ```
+   - Go to **Tools → Board → Board Manager**, search for "esp32"
+   - Install **esp32 by Espressif Systems** version 3.3.3
+
+3. Set the Sketchbook location to the `software/` folder in this repository:
+   - Go to **Preferences → Sketchbook location**
+   - Set it to `/path/to/OnSpeed-Gen3/software`
+
+   This allows Arduino IDE to find all libraries in `software/Libraries/`.
+
+4. Initialize git submodules (if not already done):
+   ```bash
+   git submodule update --init --recursive
+   ```
+
+5. Open `software/OnSpeed-Gen3-ESP32/OnSpeed-Gen3-ESP32.ino`
+
+6. Select board: **Tools → Board → ESP32S3 Dev Module**
+
+7. Configure build settings in **Tools** menu:
+   | Setting | Value |
+   |---------|-------|
+   | USB CDC On Boot | Disabled |
+   | CPU Frequency | 240MHz (WiFi) |
+   | Core Debug Level | None |
+   | USB DFU On Boot | Disabled |
+   | Erase All Flash Before Sketch Upload | Disabled |
+   | Events Run On | Core 1 |
+   | Flash Mode | OPI 80MHz |
+   | Flash Size | 32MB (256Mb) |
+   | JTAG Adapter | Disabled |
+   | Arduino Runs On | Core 1 |
+   | USB Firmware MSC On Boot | Disabled |
+   | Partition Scheme | 32M Flash (4.8MB APP/22MB LittleFS) |
+   | PSRAM | OPI PSRAM |
+   | Upload Mode | UART0 / Hardware CDC |
+   | Upload Speed | 921600 |
+   | USB Mode | Hardware CDC and JTAG |
+
+8. Click **Upload**
+
+#### Libraries
+
+All required libraries are included as git submodules in `software/Libraries/`:
+
+- Adafruit_NeoPixel
+- Arduino-Temperature-Control-Library (DallasTemperature)
+- ArduinoJson
+- BasicLinearAlgebra
+- EspSoftwareSerial
+- ghostl (required by EspSoftwareSerial 8.2.0)
+- OneButton
+- OneWire
+- RunningAverage
+- RunningMedian
+- SavitzkyGolayFilter
+- SdFat
+- arduinoWebSockets
+- csv-parser (vendored)
+- tinyxml2 (vendored)
+- onspeed_core (project-specific types and utilities)
